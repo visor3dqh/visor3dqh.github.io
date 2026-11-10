@@ -39,6 +39,11 @@ biblioteca. Los visitantes solo pueden abrir y medir; subir o borrar requiere la
    - Una nube concreta: `...?nube=bloque-a`
    - Varias: `...?nube=bloque-a,bloque-b`
 
+## Eliminar bloques
+
+Administrar → *Bloques subidos* → **Eliminar**. Pide confirmación, lo quita para todos y compacta el
+historial de la biblioteca para liberar el espacio en Hugging Face.
+
 ## Capacidad y nubes grandes
 
 - **El visor no se vuelve más pesado al crecer la biblioteca**: al entrar todos los bloques están

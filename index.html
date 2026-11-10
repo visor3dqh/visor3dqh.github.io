@@ -66,6 +66,11 @@
   #pestanas button.mini { background: none; border: 1px solid #3b434b; color: #c3c9ce; border-radius: 7px; padding: 5px 8px; font: inherit; cursor: pointer; white-space: nowrap; }
   #pestanas button.mini:hover { background: #2a3138; }
   @media (max-width: 700px) { #pestanas { right: 10px; } }
+  #adminBloques .fb { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-top: 1px solid #2a3138; }
+  #adminBloques .fb span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e8eaec; }
+  #adminBloques .fb small { color: #9aa3ab; }
+  #adminBloques .fb button { flex: 0 0 auto !important; padding: 3px 8px !important; background: #3a2629 !important; border-color: #6b2e33 !important; }
+  #adminBloques .fb button:hover { background: #e5484d !important; }
   #medidas { margin: 6px 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
   #medidas li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px solid #2a3138; }
   #medidas li span:last-child { color: #fff; font-weight: 600; }
@@ -125,6 +130,8 @@
             <p class="nota">Acepta <b>.las</b> (se convierte aquí mismo) y <b>.copc.laz</b>. Para .laz comprimido, .e57 o .ply usa
               <a href="herramientas/Convertir-a-COPC.bat" download style="color:#e8eaec">Convertir-a-COPC.bat</a>.</p>
             <button id="adminReintentar" style="width:100%; margin-top:6px; display:none"></button>
+            <h4 style="margin:12px 0 4px">Bloques subidos</h4>
+            <div id="adminBloques" class="nota">—</div>
             <button id="adminSalir" style="width:100%; margin-top:6px">Cerrar sesión</button>
           </div>
           <p class="nota" id="adminEstado"></p>
@@ -321,9 +328,6 @@ function marcarPestanas() {
     p.classList.toggle("cargada", cargadas.has(p.dataset.id));
     p.classList.toggle("cargando", cargando.has(p.dataset.id));
   });
-  const u = new URL(location.href);
-  if (cargadas.size) u.searchParams.set("nube", [...cargadas.keys()].join(",")); else u.searchParams.delete("nube");
-  history.replaceState(null, "", u);
 }
 
 // misma escala de colores por altura en todos los bloques cargados
@@ -429,6 +433,7 @@ async function listarHF() {
 
 let primeraVez = true;
 const pedidasLink = (new URLSearchParams(location.search).get("nube") || "").split(",").filter(Boolean);
+if (location.search || location.hash) history.replaceState(null, "", location.pathname); // la dirección queda limpia
 async function cargarBiblioteca() {
   let nubes = [...(CFG.nubes || [])];
   try { nubes = nubes.concat(await listarHF()); }
@@ -436,7 +441,7 @@ async function cargarBiblioteca() {
   nubesBiblio = nubes;
   const tiras = $id("tiras");
   tiras.textContent = "";
-  if (!nubes.length) { tiras.innerHTML = '<span class="titulo">Todavía no hay nubes en la biblioteca</span>'; return; }
+  if (!nubes.length) { tiras.innerHTML = '<span class="titulo">Todavía no hay nubes en la biblioteca</span>'; pintarBloquesAdmin(); return; }
   for (const n of nubes) {
     const p = document.createElement("div");
     p.className = "pest"; p.dataset.id = n.id; p.title = "Clic: cargar / quitar · Doble clic: ir al bloque";
@@ -455,7 +460,7 @@ async function cargarBiblioteca() {
     p.ondblclick = () => { const c = cargadas.get(n.id); if (c) viewer.zoomTo(c.pc, 1.1, 600); };
     tiras.append(p);
   }
-  marcarPestanas();
+  marcarPestanas(); pintarBloquesAdmin();
   if (!primeraVez) return;
   primeraVez = false;
   const pedidas = pedidasLink;
@@ -517,7 +522,7 @@ $id("adminLink").onclick = (e) => {
   e.preventDefault();
   const a = $id("admin"); a.style.display = a.style.display === "none" ? "block" : "none";
   estado("");
-  if (token) mostrar("subir");
+  if (token) { mostrar("subir"); pintarBloquesAdmin(); }
   else if (!cifradoTok()) mostrar("config");
   else mostrar("login");
 };
@@ -529,7 +534,7 @@ $id("adminEntrar").onclick = async () => {
   try {
     token = await descifrar(cifradoTok(), pass);
     if ($id("adminRecordar").checked) guardar("hfToken", token);
-    $id("adminClave").value = ""; mostrar("subir"); estado("Sesión iniciada. Elige un archivo .copc.laz.");
+    $id("adminClave").value = ""; mostrar("subir"); pintarBloquesAdmin(); estado("Sesión iniciada. Elige un archivo .copc.laz.");
   } catch (e) { token = null; estado("Contraseña incorrecta."); }
   $id("adminEntrar").disabled = false;
 };
@@ -553,7 +558,7 @@ $id("cfgCifrar").onclick = async () => {
   token = t;
   if ($id("adminRecordar").checked) guardar("hfToken", t);
   $id("cfgToken").value = ""; $id("cfgClave").value = "";
-  mostrar("subir"); estado("Equipo configurado. Ya puedes subir nubes.");
+  mostrar("subir"); pintarBloquesAdmin(); estado("Equipo configurado. Ya puedes subir nubes.");
 };
 
 function convertirEnNavegador(file, carpeta, progreso, extra = {}) {
@@ -623,6 +628,45 @@ async function trabajar(tarea) { // bloquea los botones y avisa si se intenta ce
   window.removeEventListener("beforeunload", evitarCierre);
   $id("adminEnviar").disabled = $id("adminArchivo").disabled = $id("adminReintentar").disabled = false;
   barra.style.display = "none"; mostrarPendiente();
+}
+
+// Lista de bloques de la biblioteca de subida, con botón para eliminarlos (solo con sesión).
+function pintarBloquesAdmin() {
+  const caja = $id("adminBloques"); if (!caja) return;
+  const mios = nubesBiblio.filter((n) => n.repo === repo());
+  caja.textContent = mios.length ? "" : "Todavía no hay bloques.";
+  for (const n of mios) {
+    const fila = document.createElement("div"); fila.className = "fb";
+    const nom = document.createElement("span"); nom.textContent = n.nombre; nom.title = n.ruta;
+    const peso = document.createElement("small"); peso.textContent = n.peso || "";
+    const bt = document.createElement("button"); bt.textContent = "Eliminar";
+    bt.onclick = () => eliminarBloque(n);
+    fila.append(nom, peso, bt); caja.append(fila);
+  }
+}
+
+async function eliminarBloque(n) {
+  if (!token) { estado("Inicia sesión primero."); return; }
+  if (!confirm("¿Eliminar «" + n.nombre + "» de la biblioteca?\n\nDesaparece para todos y no se puede deshacer.")) return;
+  await trabajar(async () => {
+    estado("Eliminando «" + n.nombre + "»…");
+    quitarNube(n.id);
+    const carpeta = n.ruta.endsWith("/metadata.json") ? n.ruta.slice(0, -"/metadata.json".length) : null;
+    const rutas = carpeta ? ["octree.bin", "hierarchy.bin", "metadata.json"].map((x) => carpeta + "/" + x) : [n.ruta];
+    const { deleteFiles } = await import("./libs/hf/hfhub.mjs");
+    await deleteFiles({ repo: { type: "dataset", name: repo() }, accessToken: token, paths: rutas, commitTitle: "Eliminar " + n.nombre });
+    // Borrar archivos no libera espacio por sí solo (quedan en el historial): se compacta el historial.
+    let liberado = false;
+    try {
+      const r = await fetch(`${HF}/api/datasets/${repo()}/super-squash/main`, {
+        method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "Compactar historial" }),
+      });
+      liberado = r.ok;
+    } catch (e) {}
+    estado("Eliminado: «" + n.nombre + "»." + (liberado ? " Espacio liberado." : " (El espacio se libera en Hugging Face → biblioteca → Settings → Storage.)"));
+    await cargarBiblioteca();
+  });
 }
 
 $id("adminReintentar").onclick = () => trabajar(async () => {
