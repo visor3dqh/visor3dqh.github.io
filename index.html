@@ -38,7 +38,10 @@
   }
   #vp button:hover { background: #353d45; }
   #vp button.activo { background: #e5484d; border-color: #e5484d; color: #fff; }
-  #vp .nube { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
+  #vp .nube { display: block; width: 100%; text-align: left; margin: 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #vp .nube small { float: right; }
+  #listaNubes { max-height: 34vh; overflow-y: auto; }
+  .potree_menu_toggle, #potree_map_toggle, #potree_quick_buttons { display: none !important; }
   #vp .nube small { color: #9aa3ab; margin-left: auto; }
   #vp .valor { flex: 0 0 62px !important; white-space: nowrap; text-align: right; color: #9aa3ab; font-variant-numeric: tabular-nums; }
   #vp .nota { color: #9aa3ab; font-size: 12px; margin: 6px 0 0; }
@@ -72,20 +75,8 @@
       <header id="vpCab"><b id="vpTitulo">Visor 3D</b><span id="vpFlecha">▾</span></header>
 
       <section>
-        <h4>Nubes de puntos</h4>
+        <h4>Biblioteca de nubes</h4>
         <div id="listaNubes"></div>
-        <label class="fila"><span>Calidad</span>
-          <select id="calidad">
-            <option value="baja">Baja (laptop básica)</option>
-            <option value="media" selected>Media</option>
-            <option value="alta">Alta</option>
-          </select></label>
-        <label class="fila"><span>Color</span>
-          <select id="colorPor">
-            <option value="rgba">Color real (RGB)</option>
-            <option value="elevation">Altura</option>
-            <option value="intensity">Intensidad</option>
-          </select></label>
       </section>
 
       <section>
@@ -119,24 +110,25 @@
           <button data-m="distancia">Distancia</button>
           <button data-m="altura">Altura</button>
           <button data-m="area">Área</button>
-          <button data-m="angulo">Ángulo</button>
           <button id="borrarMed">Borrar</button>
         </div>
         <p class="nota">Clic izquierdo para marcar puntos, clic derecho para terminar.</p>
       </section>
 
       <section>
-        <h4>Vista</h4>
         <div class="bts">
           <button id="encuadrar">Encuadrar</button>
           <button id="proyeccion">Ortográfica</button>
-          <button id="masOpc">Más herramientas</button>
+          <select id="calidad" title="Calidad" style="flex:1 1 100%">
+            <option value="baja">Calidad baja (laptop básica)</option>
+            <option value="media" selected>Calidad media</option>
+            <option value="alta">Calidad alta</option>
+          </select>
         </div>
       </section>
     </div>
     <div id="aviso"></div>
   </div>
-  <div id="potree_sidebar_container"></div>
 </div>
 
 <script type="module">
@@ -162,11 +154,6 @@ window.viewer = viewer;
 viewer.setFOV(60);
 viewer.setBackground("gradient");
 viewer.setMinNodeSize(30);
-viewer.loadGUI(() => {
-  viewer.setLanguage("es");
-  $("#menu_tools").next().show();
-});
-
 document.title = CFG.titulo || "Visor 3D";
 $id("vpTitulo").textContent = CFG.titulo || "Visor 3D";
 $id("vpCab").onclick = () => {
@@ -195,17 +182,13 @@ const equipoBasico = (navigator.deviceMemory && navigator.deviceMemory <= 4) || 
 aplicarCalidad(leer("calidad") || (equipoBasico ? "baja" : "media"));
 $id("calidad").onchange = (e) => aplicarCalidad(e.target.value);
 
-$id("colorPor").onchange = (e) => {
-  for (const pc of viewer.scene.pointclouds) pc.material.activeAttributeName = e.target.value;
-};
-
-/* ---------- nubes ---------- */
-const cargadas = new Map(); // id -> pointcloud
+/* ---------- biblioteca de nubes ---------- */
+let actual = null; // { id, pc }
+const API = "https://www.googleapis.com/drive/v3/files";
 
 function urlDe(n) {
   if (n.url) return n.url;
-  if (!CFG.driveApiKey) throw new Error("Falta la clave de la API de Drive en config.js (driveApiKey).");
-  return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(n.driveId)}?alt=media&key=${encodeURIComponent(CFG.driveApiKey)}`;
+  return `${API}/${encodeURIComponent(n.driveId)}?alt=media&key=${encodeURIComponent(CFG.driveApiKey)}`;
 }
 
 async function comprobar(url) {
@@ -215,14 +198,18 @@ async function comprobar(url) {
   catch (e) { throw new Error("No se pudo conectar con el archivo (red o permisos del navegador)."); }
   if (r.status === 206) return;
   if (r.status === 200) throw new Error("El servidor no permite lectura por partes; el archivo no se puede transmitir.");
-  if (r.status === 404) throw new Error("Archivo no encontrado: revisa el ID y que esté compartido como «Cualquier persona con el enlace».");
+  if (r.status === 404) throw new Error("Archivo no encontrado o no compartido como «Cualquier persona con el enlace».");
   if (r.status === 403) throw new Error("Acceso denegado (403): revisa la clave de API, su restricción de dominio, o la cuota de descargas de Drive.");
   if (r.status === 400) throw new Error("Clave de API no válida (400).");
   throw new Error("Error " + r.status + " al leer el archivo.");
 }
 
-async function cargarNube(n) {
-  if (cargadas.has(n.id)) return;
+function marcarActiva() {
+  document.querySelectorAll("#listaNubes .nube").forEach((b) => b.classList.toggle("activo", !!actual && b.dataset.id === actual.id));
+}
+
+async function abrirNube(n) {
+  if (actual && actual.id === n.id) return;
   aviso("Cargando «" + n.nombre + "»…", false, true);
   try {
     const url = urlDe(n);
@@ -235,50 +222,58 @@ async function cargarNube(n) {
     pc.material.size = 1;
     pc.material.pointSizeType = Potree.PointSizeType.ADAPTIVE;
     pc.material.shape = Potree.PointShape.SQUARE;
-    pc.material.activeAttributeName = $id("colorPor").value;
+    // formatos LAS 7, 8 y 10 traen color; el resto se pinta por altura
+    const fmt = geometry.copc && geometry.copc.header ? geometry.copc.header.pointDataRecordFormat : 7;
+    pc.material.activeAttributeName = [7, 8, 10].includes(fmt) ? "rgba" : "elevation";
+    if (actual) { // cierra la nube anterior
+      viewer.scene.scenePointCloud.remove(actual.pc);
+      const i = viewer.scene.pointclouds.indexOf(actual.pc);
+      if (i >= 0) viewer.scene.pointclouds.splice(i, 1);
+      viewer.scene.removeAllMeasurements();
+    }
     viewer.scene.addPointCloud(pc);
-    cargadas.set(n.id, pc);
-    if (cargadas.size === 1) viewer.fitToScreen(0.6);
-    actualizarCorte();
+    actual = { id: n.id, pc };
+    viewer.fitToScreen(0.6);
+    actualizarCorte(); marcarActiva();
+    const u = new URL(location.href); u.searchParams.set("nube", n.id); history.replaceState(null, "", u);
     aviso("");
   } catch (e) {
     console.error(e);
-    const chk = document.querySelector(`#listaNubes input[data-id="${n.id}"]`);
-    if (chk) chk.checked = false;
     aviso("«" + n.nombre + "»: " + (e.message || e), true);
   }
-  actualizarLink();
 }
 
-function quitarNube(n) {
-  const pc = cargadas.get(n.id);
-  if (!pc) return;
-  viewer.scene.scenePointCloud.remove(pc);
-  const i = viewer.scene.pointclouds.indexOf(pc);
-  if (i >= 0) viewer.scene.pointclouds.splice(i, 1);
-  cargadas.delete(n.id);
-  actualizarCorte(); actualizarLink();
+async function listarDrive() {
+  // todas las nubes .copc.laz de la carpeta pública de Drive
+  if (!CFG.driveApiKey || !CFG.driveFolderId) return [];
+  const q = encodeURIComponent(`'${CFG.driveFolderId}' in parents and trashed = false`);
+  const r = await fetch(`${API}?q=${q}&fields=files(id,name,size)&orderBy=name&pageSize=500&key=${encodeURIComponent(CFG.driveApiKey)}`);
+  if (!r.ok) throw new Error("No se pudo leer la carpeta de Drive (error " + r.status + "). Revisa la clave y que la carpeta esté compartida por enlace.");
+  const j = await r.json();
+  return (j.files || []).filter((f) => /\.copc\.laz$/i.test(f.name)).map((f) => ({
+    id: f.id, driveId: f.id, nombre: f.name.replace(/\.copc\.laz$/i, "").replace(/[_-]+/g, " "),
+    peso: f.size ? (f.size / 1073741824).toFixed(1) + " GB" : "",
+  }));
 }
 
-function actualizarLink() {
-  const u = new URL(location.href);
-  u.searchParams.set("nube", [...cargadas.keys()].join(","));
-  history.replaceState(null, "", u);
-}
-
-const pedido = new URLSearchParams(location.search).get("nube");
-const iniciales = pedido !== null ? pedido.split(",") : (CFG.inicial || []);
-for (const n of CFG.nubes) {
-  const fila = document.createElement("label");
-  fila.className = "nube";
-  const chk = document.createElement("input");
-  chk.type = "checkbox"; chk.dataset.id = n.id;
-  chk.onchange = () => (chk.checked ? cargarNube(n) : quitarNube(n));
-  fila.append(chk, document.createTextNode(n.nombre));
-  $id("listaNubes").append(fila);
-  if (iniciales.includes(n.id)) { chk.checked = true; cargarNube(n); }
-}
-if (!CFG.nubes.length) $id("listaNubes").textContent = "Agrega tus nubes en config.js";
+(async () => {
+  let nubes = [...(CFG.nubes || [])];
+  try { nubes = nubes.concat(await listarDrive()); }
+  catch (e) { console.error(e); aviso(e.message, true); }
+  const lista = $id("listaNubes");
+  if (!nubes.length) { lista.textContent = "Todavía no hay nubes en la biblioteca."; return; }
+  for (const n of nubes) {
+    const b = document.createElement("button");
+    b.className = "nube"; b.dataset.id = n.id; b.title = n.nombre;
+    if (n.peso) { const s = document.createElement("small"); s.textContent = n.peso; b.append(s); }
+    b.append(document.createTextNode(n.nombre));
+    b.onclick = () => abrirNube(n);
+    lista.append(b);
+  }
+  const pedido = new URLSearchParams(location.search).get("nube");
+  const ini = nubes.find((n) => n.id === pedido) || (nubes.length === 1 ? nubes[0] : null);
+  if (ini) abrirNube(ini);
+})();
 
 /* ---------- corte de sección ---------- */
 const sec = window.VisorSeccion = { mode: 0, normal: [0, 0, 1], point: [0, 0, 0], thickness: 0.1, color: [1, 0, 0] };
@@ -358,7 +353,6 @@ const MED = {
   distancia: { showDistances: true, closed: false, name: "Distancia" },
   altura:    { showDistances: false, showHeight: true, showArea: false, closed: false, maxMarkers: 2, name: "Altura" },
   area:      { showDistances: true, showArea: true, closed: true, name: "Área" },
-  angulo:    { showDistances: false, showAngles: true, showArea: false, closed: true, maxMarkers: 3, name: "Ángulo" },
 };
 for (const bt of document.querySelectorAll("button[data-m]"))
   bt.onclick = () => viewer.measuringTool.startInsertion(MED[bt.dataset.m]);
@@ -372,7 +366,6 @@ function ortografica(si) {
 }
 $id("proyeccion").onclick = () => ortografica(!$id("proyeccion").dataset.o);
 $id("encuadrar").onclick = () => viewer.fitToScreen(0.6);
-$id("masOpc").onclick = () => viewer.toggleSidebar();
 </script>
 </body>
 </html>

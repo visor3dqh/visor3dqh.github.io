@@ -11,20 +11,16 @@ window.VISOR_CONFIG = {
   // Restríngela a tu dominio de GitHub Pages para que nadie más pueda usarla.
   driveApiKey: "",
 
-  // Lista de nubes. Cada una necesita:
-  //   id      -> texto corto sin espacios (se usa en el link: ?nube=id)
-  //   nombre  -> lo que se ve en el panel
-  //   driveId -> ID del archivo .copc.laz en Drive
-  //              (o "url" si el archivo está en otro servidor)
+  // BIBLIOTECA: ID de la carpeta de Drive donde subes las nubes (.copc.laz).
+  // Todo archivo .copc.laz que pongas en esa carpeta aparece solo en el visor.
+  // La carpeta debe estar compartida como "Cualquier persona con el enlace (Lector)".
+  driveFolderId: "",
+
+  // Nubes fijas adicionales (opcional). La de ejemplo puedes borrarla
+  // cuando tu biblioteca de Drive ya tenga nubes.
   nubes: [
     { id: "ejemplo", nombre: "Ejemplo (estatua)", url: "pointclouds/ejemplo.copc.laz" },
-
-    // { id: "bloque-a", nombre: "Bloque A", driveId: "PEGA_AQUI_EL_ID_DE_DRIVE" },
-    // { id: "bloque-b", nombre: "Bloque B", driveId: "PEGA_AQUI_EL_ID_DE_DRIVE" },
   ],
-
-  // Nubes que se abren al entrar si el link no indica ninguna
-  inicial: ["ejemplo"],
 
   // Corte de sección: valores por defecto
   corte: { color: "#ff0000", grosor: 0.10 },

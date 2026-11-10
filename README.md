@@ -28,15 +28,19 @@ El archivo debe terminar en `.copc.laz`. Suele pesar menos que el LAS original.
 4. Restringe la clave: *Sitios web* → `https://TU-USUARIO.github.io/*`, y *API* → solo Drive API.
    (Así, aunque la clave sea visible en el repositorio, solo funciona desde tu visor.)
 
-## 3. Editar `config.js`
+## 3. Biblioteca: una carpeta de Drive
+
+Crea en Drive una carpeta (por ejemplo "Nubes visor"), compártela como
+**Cualquier persona con el enlace (Lector)** y copia su ID (lo que va después de
+`/folders/` en el enlace). En `config.js`:
 
 ```js
 driveApiKey: "TU_CLAVE",
-nubes: [
-  { id: "bloque-a", nombre: "Bloque A", driveId: "ID_DE_DRIVE" },
-],
-inicial: ["bloque-a"],
+driveFolderId: "ID_DE_LA_CARPETA",
 ```
+
+Desde ahí, **agregar una nube = subir su `.copc.laz` a esa carpeta**. Aparece sola en la
+biblioteca del visor para todos. Solo tu cuenta de Google puede subir o borrar.
 
 ## 4. Publicar en GitHub Pages
 
