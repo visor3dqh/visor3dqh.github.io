@@ -77,6 +77,16 @@
       <section>
         <h4>Biblioteca de nubes</h4>
         <div id="listaNubes"></div>
+        <p class="nota"><a href="#" id="adminLink" style="color:#9aa3ab">Administrar</a></p>
+        <div id="admin" style="display:none">
+          <button id="adminEntrar" style="width:100%">Iniciar sesión con Google</button>
+          <div id="adminSubir" style="display:none">
+            <input type="file" id="adminArchivo" accept=".laz,.las" style="width:100%; margin:6px 0">
+            <button id="adminEnviar" style="width:100%">Subir a la biblioteca</button>
+            <progress id="adminProg" max="1" value="0" style="width:100%; display:none; margin-top:6px"></progress>
+          </div>
+          <p class="nota" id="adminEstado"></p>
+        </div>
       </section>
 
       <section>
@@ -256,11 +266,13 @@ async function listarDrive() {
   }));
 }
 
-(async () => {
+let primeraVez = true;
+async function cargarBiblioteca() {
   let nubes = [...(CFG.nubes || [])];
   try { nubes = nubes.concat(await listarDrive()); }
   catch (e) { console.error(e); aviso(e.message, true); }
   const lista = $id("listaNubes");
+  lista.textContent = "";
   if (!nubes.length) { lista.textContent = "Todavía no hay nubes en la biblioteca."; return; }
   for (const n of nubes) {
     const b = document.createElement("button");
@@ -270,10 +282,109 @@ async function listarDrive() {
     b.onclick = () => abrirNube(n);
     lista.append(b);
   }
+  marcarActiva();
+  if (!primeraVez) return;
+  primeraVez = false;
   const pedido = new URLSearchParams(location.search).get("nube");
   const ini = nubes.find((n) => n.id === pedido) || (nubes.length === 1 ? nubes[0] : null);
   if (ini) abrirNube(ini);
-})();
+}
+cargarBiblioteca();
+
+/* ---------- administración: subir nubes a Drive (solo el dueño) ---------- */
+let token = null;
+const carpetaId = () => CFG.driveFolderId || leer("carpeta") || "";
+const estado = (t) => ($id("adminEstado").textContent = t);
+
+$id("adminLink").onclick = (e) => {
+  e.preventDefault();
+  const a = $id("admin"); a.style.display = a.style.display === "none" ? "block" : "none";
+  if (!CFG.googleClientId) { estado("Falta configurar el inicio de sesión de Google (googleClientId en config.js)."); $id("adminEntrar").style.display = "none"; return; }
+  if (!window.google || !google.accounts) { // precarga para que el clic de inicio de sesión abra la ventana sin bloqueo
+    const sc = document.createElement("script"); sc.src = "https://accounts.google.com/gsi/client"; document.head.append(sc);
+  }
+};
+
+$id("adminEntrar").onclick = () => {
+  if (!window.google || !google.accounts) { estado("Cargando inicio de sesión… vuelve a pulsar en un momento."); return; }
+  google.accounts.oauth2.initTokenClient({
+    client_id: CFG.googleClientId,
+    scope: "https://www.googleapis.com/auth/drive.file",
+    callback: async (r) => {
+      if (!r.access_token) { estado("Inicio de sesión cancelado."); return; }
+      token = r.access_token;
+      $id("adminEntrar").style.display = "none"; $id("adminSubir").style.display = "block";
+      try { await asegurarCarpeta(); } catch (e) { estado(e.message); }
+    },
+    error_callback: () => estado("Inicio de sesión cancelado."),
+  }).requestAccessToken();
+};
+
+async function g(url, opciones = {}) {
+  const r = await fetch(url, { ...opciones, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json", ...(opciones.headers || {}) } });
+  if (!r.ok) throw new Error("Drive respondió " + r.status + ". Solo la cuenta dueña de la carpeta puede subir.");
+  return r;
+}
+
+async function asegurarCarpeta() {
+  if (carpetaId()) { estado("Sesión iniciada. Elige un archivo .copc.laz."); return; }
+  const r = await g(API, { method: "POST", body: JSON.stringify({ name: "Nubes Visor 3D", mimeType: "application/vnd.google-apps.folder" }) });
+  const id = (await r.json()).id;
+  await g(`${API}/${id}/permissions`, { method: "POST", body: JSON.stringify({ role: "reader", type: "anyone" }) });
+  guardar("carpeta", id);
+  estado("Carpeta creada en tu Drive. Copia este ID en config.js (driveFolderId): " + id);
+}
+
+function enviarTrozo(url, trozo, inicio, total, progreso) {
+  return new Promise((ok, mal) => {
+    const x = new XMLHttpRequest();
+    x.open("PUT", url);
+    x.setRequestHeader("Content-Range", trozo ? `bytes ${inicio}-${inicio + trozo.size - 1}/${total}` : `bytes */${total}`);
+    if (trozo) x.upload.onprogress = (e) => progreso(inicio + e.loaded);
+    x.onload = () => ok(x); x.onerror = () => mal(new Error("red"));
+    x.send(trozo || null);
+  });
+}
+
+async function subir(archivo) {
+  const r = await g("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable", {
+    method: "POST", body: JSON.stringify({ name: archivo.name, parents: [carpetaId()] }),
+    headers: { "X-Upload-Content-Length": String(archivo.size) },
+  });
+  const url = r.headers.get("Location");
+  if (!url) throw new Error("Drive no devolvió la dirección de subida.");
+  const TROZO = 32 * 1024 * 1024, total = archivo.size, barra = $id("adminProg");
+  let pos = 0, fallos = 0;
+  barra.style.display = "block";
+  const progreso = (b) => { barra.value = b / total; estado("Subiendo… " + ((100 * b) / total).toFixed(1) + " %  (no cierres esta pestaña)"); };
+  while (pos < total) {
+    let x;
+    try { x = await enviarTrozo(url, archivo.slice(pos, Math.min(pos + TROZO, total)), pos, total, progreso); fallos = 0; }
+    catch (e) { // corte de red: espera, pregunta a Drive cuánto recibió y continúa
+      if (++fallos > 8) throw new Error("Se perdió la conexión demasiadas veces. Vuelve a intentarlo.");
+      await new Promise((t) => setTimeout(t, 3000 * fallos));
+      try { x = await enviarTrozo(url, null, 0, total); } catch (e2) { continue; }
+    }
+    if (x.status === 200 || x.status === 201) { pos = total; break; }
+    if (x.status === 308) {
+      const m = /-(\d+)$/.exec(x.getResponseHeader("Range") || "");
+      pos = m ? parseInt(m[1]) + 1 : (x.getResponseHeader("Range") === null && fallos === 0 ? Math.min(pos + TROZO, total) : pos);
+      continue;
+    }
+    throw new Error("Drive rechazó la subida (error " + x.status + ").");
+  }
+}
+
+$id("adminEnviar").onclick = async () => {
+  const f = $id("adminArchivo").files[0];
+  if (!f) { estado("Elige primero un archivo."); return; }
+  if (!/\.copc\.laz$/i.test(f.name)) { estado("Este archivo no está convertido. El visor necesita .copc.laz: convierte tu .las en tu PC y sube el resultado."); return; }
+  if (!carpetaId()) { estado("Aún no hay carpeta de biblioteca."); return; }
+  $id("adminEnviar").disabled = true;
+  try { await subir(f); estado("Listo: «" + f.name + "» ya está en la biblioteca."); await cargarBiblioteca(); }
+  catch (e) { console.error(e); estado(e.message); }
+  $id("adminEnviar").disabled = false; $id("adminProg").style.display = "none";
+};
 
 /* ---------- corte de sección ---------- */
 const sec = window.VisorSeccion = { mode: 0, normal: [0, 0, 1], point: [0, 0, 0], thickness: 0.1, color: [1, 0, 0] };

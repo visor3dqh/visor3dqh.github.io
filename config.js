@@ -11,6 +11,9 @@ window.VISOR_CONFIG = {
   // Restríngela a tu dominio de GitHub Pages para que nadie más pueda usarla.
   driveApiKey: "",
 
+  // ID de cliente OAuth de Google (para el botón "Administrar": iniciar sesión y subir nubes).
+  googleClientId: "",
+
   // BIBLIOTECA: ID de la carpeta de Drive donde subes las nubes (.copc.laz).
   // Todo archivo .copc.laz que pongas en esa carpeta aparece solo en el visor.
   // La carpeta debe estar compartida como "Cualquier persona con el enlace (Lector)".
