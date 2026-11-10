@@ -22,7 +22,6 @@ window.VISOR_CONFIG = {
   // Nubes fijas adicionales (opcional). La de ejemplo puedes borrarla
   // cuando tu biblioteca de Drive ya tenga nubes.
   nubes: [
-    { id: "ejemplo", nombre: "Ejemplo (estatua)", url: "pointclouds/ejemplo.copc.laz" },
   ],
 
   // Corte de sección: valores por defecto

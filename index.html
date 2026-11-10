@@ -262,7 +262,7 @@ async function listarDrive() {
   const j = await r.json();
   return (j.files || []).filter((f) => /\.copc\.laz$/i.test(f.name)).map((f) => ({
     id: f.id, driveId: f.id, nombre: f.name.replace(/\.copc\.laz$/i, "").replace(/[_-]+/g, " "),
-    peso: f.size ? (f.size / 1073741824).toFixed(1) + " GB" : "",
+    peso: !f.size ? "" : f.size >= 1073741824 ? (f.size / 1073741824).toFixed(1) + " GB" : Math.max(1, Math.round(f.size / 1048576)) + " MB",
   }));
 }
 
@@ -353,7 +353,7 @@ async function subir(archivo) {
   });
   const url = r.headers.get("Location");
   if (!url) throw new Error("Drive no devolvió la dirección de subida.");
-  const TROZO = 32 * 1024 * 1024, total = archivo.size, barra = $id("adminProg");
+  const TROZO = 16 * 1024 * 1024, total = archivo.size, barra = $id("adminProg");
   let pos = 0, fallos = 0;
   barra.style.display = "block";
   const progreso = (b) => { barra.value = b / total; estado("Subiendo… " + ((100 * b) / total).toFixed(1) + " %  (no cierres esta pestaña)"); };
@@ -365,7 +365,18 @@ async function subir(archivo) {
       await new Promise((t) => setTimeout(t, 3000 * fallos));
       try { x = await enviarTrozo(url, null, 0, total); } catch (e2) { continue; }
     }
-    if (x.status === 200 || x.status === 201) { pos = total; break; }
+    if (x.status === 200 || x.status === 201) {
+      // verificación: Drive debe tener exactamente el mismo tamaño
+      let id = null; try { id = JSON.parse(x.responseText).id; } catch (e) {}
+      if (id) {
+        const m = await (await g(`${API}/${id}?fields=size`)).json();
+        if (String(m.size) !== String(total)) {
+          await g(`${API}/${id}`, { method: "DELETE" }).catch(() => {});
+          throw new Error("La subida llegó incompleta a Drive y se descartó. Vuelve a intentarlo.");
+        }
+      }
+      pos = total; break;
+    }
     if (x.status === 308) {
       const m = /-(\d+)$/.exec(x.getResponseHeader("Range") || "");
       pos = m ? parseInt(m[1]) + 1 : (x.getResponseHeader("Range") === null && fallos === 0 ? Math.min(pos + TROZO, total) : pos);
