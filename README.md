@@ -25,9 +25,8 @@ El archivo debe terminar en `.copc.laz`. Suele pesar menos que el LAS original.
 2. Crea un repositorio de datos **público**: <https://huggingface.co/new-dataset>, por ejemplo `nubes-visor`.
 3. Crea un token de acceso *fine-grained* en <https://huggingface.co/settings/tokens/new?tokenType=fineGrained>
    con permiso de **escritura solo en ese repositorio**.
-4. En el visor: **Administrar → Configuración inicial**. Pega el token y escribe la contraseña del visor;
-   pulsa *Generar código*. El código (el token cifrado) va en `config.js` → `hfTokenCifrado`, y el nombre
-   del repositorio (`usuario/nubes-visor`) en `hfRepo`. El token nunca sale de tu equipo sin cifrar.
+4. En el visor (en tu laptop): **Administrar**, pega el token y elige la contraseña → *Configurar este equipo*.
+   El token queda guardado solo en ese equipo, cifrado con la contraseña; no se publica en ningún lado.
 
 ## 3. Subir nubes
 

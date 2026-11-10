@@ -85,11 +85,10 @@
             <button id="adminEntrar" style="width:100%">Entrar</button>
           </div>
           <div id="adminConfig" style="display:none">
-            <p class="nota">Configuración inicial (una sola vez).</p>
+            <p class="nota">Primera vez en este equipo: pega tu token de Hugging Face y elige la contraseña. Queda guardado solo aquí, cifrado.</p>
             <input type="password" id="cfgToken" placeholder="Token de Hugging Face (escritura)" style="width:100%; box-sizing:border-box; margin:3px 0">
             <input type="password" id="cfgClave" placeholder="Contraseña para el visor" style="width:100%; box-sizing:border-box; margin:3px 0">
-            <button id="cfgCifrar" style="width:100%">Generar código</button>
-            <textarea id="cfgSalida" readonly style="width:100%; box-sizing:border-box; height:70px; margin-top:6px; display:none; background:#0f1215; color:#e8eaec; border:1px solid #3b434b; border-radius:5px; font:11px monospace"></textarea>
+            <button id="cfgCifrar" style="width:100%">Configurar este equipo</button>
           </div>
           <div id="adminSubir" style="display:none">
             <input type="file" id="adminArchivo" accept=".laz" style="width:100%; margin:6px 0">
@@ -336,6 +335,7 @@ async function descifrar(blob, pass) {
   return new TextDecoder().decode(p);
 }
 
+const cifradoTok = () => CFG.hfTokenCifrado || leer("hfTokenCifrado") || "";
 let token = null;
 const estado = (t) => ($id("adminEstado").textContent = t);
 function mostrar(vista) {
@@ -345,7 +345,7 @@ function mostrar(vista) {
 }
 (() => { // sesión guardada en este equipo
   const t = leer("hfToken");
-  if (t && CFG.hfTokenCifrado) token = t;
+  if (t && cifradoTok()) token = t;
 })();
 
 $id("adminLink").onclick = (e) => {
@@ -353,7 +353,7 @@ $id("adminLink").onclick = (e) => {
   const a = $id("admin"); a.style.display = a.style.display === "none" ? "block" : "none";
   estado("");
   if (token) mostrar("subir");
-  else if (!CFG.hfTokenCifrado) mostrar("config");
+  else if (!cifradoTok()) mostrar("config");
   else mostrar("login");
 };
 
@@ -362,7 +362,7 @@ $id("adminEntrar").onclick = async () => {
   if (!pass) return;
   $id("adminEntrar").disabled = true; estado("Comprobando…");
   try {
-    token = await descifrar(CFG.hfTokenCifrado, pass);
+    token = await descifrar(cifradoTok(), pass);
     if ($id("adminRecordar").checked) guardar("hfToken", token);
     $id("adminClave").value = ""; mostrar("subir"); estado("Sesión iniciada. Elige un archivo .copc.laz.");
   } catch (e) { token = null; estado("Contraseña incorrecta."); }
@@ -372,17 +372,23 @@ $id("adminClave").addEventListener("keydown", (e) => { if (e.key === "Enter") $i
 
 $id("adminSalir").onclick = () => {
   token = null; try { localStorage.removeItem("visor3d.hfToken"); } catch (e) {}
-  mostrar(CFG.hfTokenCifrado ? "login" : "config"); estado("Sesión cerrada.");
+  mostrar(cifradoTok() ? "login" : "config"); estado("Sesión cerrada.");
 };
 
 $id("cfgCifrar").onclick = async () => {
   const t = $id("cfgToken").value.trim(), p = $id("cfgClave").value;
   if (!/^hf_/.test(t) || !p) { estado("Pega el token (empieza con hf_) y escribe la contraseña."); return; }
-  estado("Generando…");
-  const out = $id("cfgSalida");
-  out.value = await cifrar(t, p); out.style.display = "block"; out.select();
+  estado("Comprobando el token…");
+  try {
+    const r = await fetch(`${HF}/api/whoami-v2`, { headers: { Authorization: "Bearer " + t } });
+    if (!r.ok) throw new Error();
+  } catch (e) { estado("Hugging Face no aceptó ese token."); return; }
+  estado("Guardando…");
+  guardar("hfTokenCifrado", await cifrar(t, p)); // solo en este equipo, cifrado con la contraseña
+  token = t;
+  if ($id("adminRecordar").checked) guardar("hfToken", t);
   $id("cfgToken").value = ""; $id("cfgClave").value = "";
-  estado("Copia este código y pásalo para ponerlo en config.js (hfTokenCifrado). El token no sale de tu equipo.");
+  mostrar("subir"); estado("Equipo configurado. Ya puedes subir nubes.");
 };
 
 $id("adminEnviar").onclick = async () => {

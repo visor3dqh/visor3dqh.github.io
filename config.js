@@ -8,7 +8,7 @@ window.VISOR_CONFIG = {
 
   // BIBLIOTECA: repositorio de datos (dataset) público en Hugging Face,
   // en formato "usuario/nombre". Todo archivo .copc.laz que tenga aparece en el visor.
-  hfRepo: "",
+  hfRepo: "Loadingfav1/nubes-visor",
 
   // Token de escritura de Hugging Face, CIFRADO con la contraseña del visor.
   // Se genera desde el propio visor: Administrar → Configuración inicial.
