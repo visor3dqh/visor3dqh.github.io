@@ -2,7 +2,7 @@
 
 Visor web para nubes de 4–6 GB que abre en cualquier laptop: solo descarga los puntos
 que se ven en pantalla. El código vive en **GitHub Pages** (da el link) y las nubes en
-**Google Drive**.
+**Hugging Face**.
 
 Incluye: corte de sección (planta / vertical, con giro, grosor y color de línea editable,
 rojo por defecto), medición (distancia, altura, área, ángulo), vista ortográfica,
@@ -19,28 +19,20 @@ El visor lee el formato **COPC** (`.copc.laz`): un LAZ ordenado por niveles de d
 
 El archivo debe terminar en `.copc.laz`. Suele pesar menos que el LAS original.
 
-## 2. Subir a Drive y crear la clave
+## 2. Biblioteca en Hugging Face (gratis)
 
-1. Sube el `.copc.laz` a Drive → Compartir → **Cualquier persona con el enlace (Lector)**.
-2. Copia el **ID** del archivo: es la parte entre `/d/` y `/view` del enlace.
-3. En <https://console.cloud.google.com>: crea un proyecto → *APIs y servicios* →
-   habilita **Google Drive API** → *Credenciales* → **Crear clave de API**.
-4. Restringe la clave: *Sitios web* → `https://TU-USUARIO.github.io/*`, y *API* → solo Drive API.
-   (Así, aunque la clave sea visible en el repositorio, solo funciona desde tu visor.)
+1. Crea una cuenta en <https://huggingface.co/join>.
+2. Crea un repositorio de datos **público**: <https://huggingface.co/new-dataset>, por ejemplo `nubes-visor`.
+3. Crea un token de acceso *fine-grained* en <https://huggingface.co/settings/tokens/new?tokenType=fineGrained>
+   con permiso de **escritura solo en ese repositorio**.
+4. En el visor: **Administrar → Configuración inicial**. Pega el token y escribe la contraseña del visor;
+   pulsa *Generar código*. El código (el token cifrado) va en `config.js` → `hfTokenCifrado`, y el nombre
+   del repositorio (`usuario/nubes-visor`) en `hfRepo`. El token nunca sale de tu equipo sin cifrar.
 
-## 3. Biblioteca: una carpeta de Drive
+## 3. Subir nubes
 
-Crea en Drive una carpeta (por ejemplo "Nubes visor"), compártela como
-**Cualquier persona con el enlace (Lector)** y copia su ID (lo que va después de
-`/folders/` en el enlace). En `config.js`:
-
-```js
-driveApiKey: "TU_CLAVE",
-driveFolderId: "ID_DE_LA_CARPETA",
-```
-
-Desde ahí, **agregar una nube = subir su `.copc.laz` a esa carpeta**. Aparece sola en la
-biblioteca del visor para todos. Solo tu cuenta de Google puede subir o borrar.
+Administrar → contraseña → elige el `.copc.laz` → *Subir a la biblioteca*. Aparece para todos en la
+biblioteca. Los visitantes solo pueden abrir y medir; subir o borrar requiere la contraseña.
 
 ## 4. Publicar en GitHub Pages
 
