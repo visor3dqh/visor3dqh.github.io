@@ -39,11 +39,23 @@ biblioteca. Los visitantes solo pueden abrir y medir; subir o borrar requiere la
    - Una nube concreta: `...?nube=bloque-a`
    - Varias: `...?nube=bloque-a,bloque-b`
 
-## Límites
+## Capacidad y nubes grandes
 
-Hugging Face da almacenamiento público gratuito "best-effort" (sin tope fijo publicado, con
-controles contra abuso) y hasta 50 GB por archivo. Si alguna vez bloquea, cualquier servidor con
-lectura por partes sirve: agrega la nube en `nubes` con su `url`.
+- **El visor no se vuelve más pesado al crecer la biblioteca**: al entrar todos los bloques están
+  apagados y, aun con varios encendidos, solo descarga los puntos que se ven (límite fijo según la
+  calidad elegida).
+- **Por archivo**: Hugging Face admite hasta 50 GB por archivo. Un .las convertido pesa ~la mitad
+  (p. ej. un .las de 20 GB queda en ~10 GB). Si un bloque supera eso, divídelo.
+- **Conversión en el navegador**: necesita espacio libre en disco ≈ tamaño del .las y la pestaña
+  abierta. Si la subida falla (corte de internet), la conversión queda guardada y aparece
+  *Reintentar subida* en Administrar: no hay que convertir otra vez.
+- **Total de la biblioteca**: el espacio público gratuito de Hugging Face es "best-effort". Si una
+  biblioteca llega a su límite, crea otra (p. ej. `nubes-visor-2`), dale permiso de escritura al
+  token y ponla en `config.js` como lista; el visor muestra todas juntas y sube a la primera:
+
+  ```js
+  hfRepo: ["Loadingfav1/nubes-visor-2", "Loadingfav1/nubes-visor"],
+  ```
 
 ## Probar en tu PC
 

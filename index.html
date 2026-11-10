@@ -124,6 +124,7 @@
             <progress id="adminProg" max="1" value="0" style="width:100%; display:none; margin-top:6px"></progress>
             <p class="nota">Acepta <b>.las</b> (se convierte aquí mismo) y <b>.copc.laz</b>. Para .laz comprimido, .e57 o .ply usa
               <a href="herramientas/Convertir-a-COPC.bat" download style="color:#e8eaec">Convertir-a-COPC.bat</a>.</p>
+            <button id="adminReintentar" style="width:100%; margin-top:6px; display:none"></button>
             <button id="adminSalir" style="width:100%; margin-top:6px">Cerrar sesión</button>
           </div>
           <p class="nota" id="adminEstado"></p>
@@ -183,8 +184,9 @@
     <div id="pestanas">
       <span class="titulo">Bloques</span>
       <div id="tiras"><span class="titulo">Cargando biblioteca…</span></div>
-      <button class="mini" id="verTodos" title="Cargar todos los bloques">Todos</button>
-      <button class="mini" id="quitarTodos" title="Quitar todos los bloques">Ninguno</button>
+      <label class="mini" title="Al encender un bloque se apagan los demás" style="display:flex;align-items:center;gap:5px;color:#c3c9ce;white-space:nowrap;cursor:pointer"><input type="checkbox" id="unoAlaVez" checked> Uno a la vez</label>
+      <button class="mini" id="verTodos" title="Encender todos los bloques" style="display:none">Todos</button>
+      <button class="mini" id="quitarTodos" title="Apagar todos los bloques">Apagar todo</button>
     </div>
     <div id="aviso"></div>
   </div>
@@ -258,10 +260,13 @@ $id("tamPunto").oninput = (e) => {
 /* ---------- biblioteca de nubes (Hugging Face) ---------- */
 const cargadas = new Map();   // id -> { pc, conColor, rangoZ }
 const cargando = new Set();
+let ultimoPedido = null; // en "uno a la vez", solo se queda el último bloque pedido
 let nubesBiblio = [];
 const HF = "https://huggingface.co";
-const repo = () => CFG.hfRepo || "";
-const urlHF = (ruta) => `${HF}/datasets/${repo()}/resolve/main/${ruta.split("/").map(encodeURIComponent).join("/")}`;
+// hfRepo puede ser un texto o una lista: se leen todas; se sube a la primera (o a hfRepoSubida).
+const repos = () => (Array.isArray(CFG.hfRepo) ? CFG.hfRepo : [CFG.hfRepo]).filter(Boolean);
+const repo = () => CFG.hfRepoSubida || repos()[0] || "";
+const urlHF = (ruta, r = repo()) => `${HF}/datasets/${r}/resolve/main/${ruta.split("/").map(encodeURIComponent).join("/")}`;
 
 // Lector por partes: resuelve una vez la dirección firmada del CDN (válida ~1 h) y la renueva si caduca.
 function lectorRemoto(url) {
@@ -297,7 +302,7 @@ window.fetch = async (entrada, opciones = {}) => {
   const rango = opciones.headers && (opciones.headers.Range || opciones.headers.range);
   let abs = null;
   try { abs = new URL(url, location.href).href; } catch (e) {}
-  if (!abs || !rango || !repo() || !abs.startsWith(`${HF}/datasets/${repo()}/resolve/`)) return _fetch(entrada, opciones);
+  if (!abs || !rango || !repos().some((r) => abs.startsWith(`${HF}/datasets/${r}/resolve/`))) return _fetch(entrada, opciones);
   for (let intento = 0; intento < 4; intento++) {
     try {
       let f = firmadas.get(abs);
@@ -334,7 +339,7 @@ async function cargarNube(n, { encuadrar = false } = {}) {
   aviso("Cargando «" + n.nombre + "»…", false, true);
   try {
     let pc, conColor, rangoZ = null;
-    const url = n.url || urlHF(n.ruta);
+    const url = n.url || urlHF(n.ruta, n.repo);
     if (/metadata\.json$/i.test(url)) { // octree Potree (convertido en la página)
       const r = await Potree.OctreeLoader.load(url);
       pc = new Potree.PointCloudOctree(r.geometry);
@@ -361,6 +366,7 @@ async function cargarNube(n, { encuadrar = false } = {}) {
       if (!rangoZ) { const bb = viewer.getBoundingBox([pc]); rangoZ = [bb.min.z, bb.max.z]; }
       if (Potree.Gradients && Potree.Gradients.TURBO) pc.material.gradient = Potree.Gradients.TURBO;
     }
+    if ($id("unoAlaVez").checked && ultimoPedido && ultimoPedido !== n.id) { cargando.delete(n.id); marcarPestanas(); if (!cargando.size) aviso(""); return; }
     const primera = cargadas.size === 0;
     viewer.scene.addPointCloud(pc);
     cargadas.set(n.id, { pc, conColor, rangoZ });
@@ -387,11 +393,10 @@ function quitarNube(id) {
 
 const pesoTexto = (b) => !b ? "" : b >= 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : Math.max(1, Math.round(b / 1048576)) + " MB";
 
-async function listarHF() {
-  if (!repo()) return [];
-  const r = await fetch(`${HF}/api/datasets/${repo()}/tree/main?recursive=true&expand=false`, { cache: "no-store" });
-  if (r.status === 404) throw new Error("No se encontró la biblioteca en Hugging Face (" + repo() + ").");
-  if (!r.ok) throw new Error("No se pudo leer la biblioteca (error " + r.status + ").");
+async function listarRepo(rp) {
+  const r = await fetch(`${HF}/api/datasets/${rp}/tree/main?recursive=true&expand=false`, { cache: "no-store" });
+  if (r.status === 404) throw new Error("No se encontró la biblioteca en Hugging Face (" + rp + ").");
+  if (!r.ok) throw new Error("No se pudo leer la biblioteca " + rp + " (error " + r.status + ").");
   const lista = await r.json();
   const tam = new Map(lista.map((f) => [f.path, (f.lfs && f.lfs.size) || f.size || 0]));
   const salida = [];
@@ -399,17 +404,31 @@ async function listarHF() {
     if (f.type !== "file") continue;
     if (/\.copc\.laz$/i.test(f.path)) {
       const base = f.path.split("/").pop().replace(/\.copc\.laz$/i, "");
-      salida.push({ id: base, ruta: f.path, nombre: base.replace(/[_-]+/g, " "), peso: pesoTexto(tam.get(f.path)) });
+      salida.push({ id: base, repo: rp, ruta: f.path, nombre: base.replace(/[_-]+/g, " "), bytes: tam.get(f.path) });
     } else if (/(^|\/)metadata\.json$/.test(f.path) && f.path.includes("/")) {
       const carpeta = f.path.slice(0, -"/metadata.json".length);
       const base = carpeta.split("/").pop();
-      salida.push({ id: base, ruta: f.path, nombre: base.replace(/[_-]+/g, " "), peso: pesoTexto(tam.get(carpeta + "/octree.bin")) });
+      salida.push({ id: base, repo: rp, ruta: f.path, nombre: base.replace(/[_-]+/g, " "), bytes: tam.get(carpeta + "/octree.bin") });
     }
   }
-  return salida.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
+  return salida;
+}
+async function listarHF() {
+  const todas = [], ids = new Set();
+  for (const rp of repos()) {
+    try {
+      for (const n of await listarRepo(rp)) {
+        let id = n.id, k = 2;
+        while (ids.has(id)) id = n.id + "-" + k++;
+        ids.add(id); n.id = id; n.peso = pesoTexto(n.bytes); todas.push(n);
+      }
+    } catch (e) { console.error(e); aviso(e.message, true); }
+  }
+  return todas.sort((a, b) => a.nombre.localeCompare(b.nombre, "es", { numeric: true }));
 }
 
 let primeraVez = true;
+const pedidasLink = (new URLSearchParams(location.search).get("nube") || "").split(",").filter(Boolean);
 async function cargarBiblioteca() {
   let nubes = [...(CFG.nubes || [])];
   try { nubes = nubes.concat(await listarHF()); }
@@ -428,19 +447,33 @@ async function cargarBiblioteca() {
     const enf = document.createElement("span"); enf.className = "enfocar"; enf.textContent = "⌖"; enf.title = "Ir a este bloque";
     enf.onclick = (e) => { e.stopPropagation(); const c = cargadas.get(n.id); if (c) viewer.zoomTo(c.pc, 1.1, 600); };
     p.append(enf);
-    p.onclick = () => (cargadas.has(n.id) ? quitarNube(n.id) : cargarNube(n));
-    p.ondblclick = () => { const c = cargadas.get(n.id); if (c) viewer.zoomTo(c.pc, 1.1, 600); else cargarNube(n, { encuadrar: true }); };
+    p.onclick = () => {
+      if (cargadas.has(n.id)) { quitarNube(n.id); return; }
+      if ($id("unoAlaVez").checked) { ultimoPedido = n.id; for (const id of [...cargadas.keys()]) quitarNube(id); }
+      cargarNube(n, { encuadrar: $id("unoAlaVez").checked });
+    };
+    p.ondblclick = () => { const c = cargadas.get(n.id); if (c) viewer.zoomTo(c.pc, 1.1, 600); };
     tiras.append(p);
   }
   marcarPestanas();
   if (!primeraVez) return;
   primeraVez = false;
-  const pedidas = (new URLSearchParams(location.search).get("nube") || "").split(",").filter(Boolean);
+  const pedidas = pedidasLink;
+  // al entrar todo está apagado, salvo los bloques que indique el link (?nube=...)
   const iniciales = nubes.filter((n) => pedidas.includes(n.id));
-  if (!iniciales.length && nubes.length) iniciales.push(nubes[0]);
+  if (iniciales.length > 1) { $id("unoAlaVez").checked = false; $id("unoAlaVez").onchange(); }
   for (const n of iniciales) cargarNube(n);
+  if (!iniciales.length) aviso("Enciende un bloque en la barra de abajo para verlo.");
 }
 $id("verTodos").onclick = () => { for (const n of nubesBiblio) cargarNube(n); };
+$id("unoAlaVez").checked = leer("unoAlaVez") !== "0";
+$id("unoAlaVez").onchange = () => {
+  const uno = $id("unoAlaVez").checked;
+  guardar("unoAlaVez", uno ? "1" : "0");
+  $id("verTodos").style.display = uno ? "none" : "";
+  if (uno && cargadas.size > 1) { const [primero] = cargadas.keys(); for (const id of [...cargadas.keys()]) if (id !== primero) quitarNube(id); }
+};
+$id("verTodos").style.display = $id("unoAlaVez").checked ? "none" : "";
 $id("quitarTodos").onclick = () => { for (const id of [...cargadas.keys()]) quitarNube(id); };
 for (const ev of ["mousedown", "mouseup", "wheel", "dblclick", "touchstart", "pointerdown", "contextmenu", "keydown"])
   $id("pestanas").addEventListener(ev, (e) => e.stopPropagation());
@@ -538,6 +571,72 @@ function convertirEnNavegador(file, carpeta, progreso, extra = {}) {
 }
 window.convertirEnNavegador = convertirEnNavegador; // para pruebas
 
+// Conversión pendiente de subir (si la subida falló): se guarda en el disco del navegador.
+const pendiente = () => { try { return JSON.parse(leer("pendiente") || "null"); } catch (e) { return null; } };
+function mostrarPendiente() {
+  const p = pendiente(), bt = $id("adminReintentar");
+  bt.style.display = p ? "block" : "none";
+  if (p) bt.textContent = "Reintentar subida de «" + p.base.replace(/_/g, " ") + "» (ya convertida)";
+}
+mostrarPendiente();
+
+async function subirArchivos(archivos, base) {
+  const { uploadFilesWithProgress } = await import("./libs/hf/hfhub.mjs");
+  const barra = $id("adminProg");
+  const total = archivos.reduce((a, x) => a + x.content.size, 0);
+  const hecho = new Map();
+  for await (const ev of uploadFilesWithProgress({
+    repo: { type: "dataset", name: repo() }, accessToken: token, files: archivos,
+    commitTitle: "Subir " + base, useXet: true,
+  })) {
+    if (ev.event === "fileProgress") {
+      const x = archivos.find((a) => a.path === ev.path);
+      if (x) hecho.set(ev.path, ev.progress * x.content.size);
+      const p = [...hecho.values()].reduce((a, v) => a + v, 0) / total;
+      barra.value = p;
+      estado((ev.state === "hashing" ? "Preparando la subida… " : "Subiendo… ") + (100 * p).toFixed(1) + " % de " + pesoTexto(total) + "  (no cierres esta pestaña)");
+    }
+  }
+}
+
+async function archivosDeCarpeta(carpeta, base) {
+  const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(carpeta);
+  const out = [];
+  for (const nom of ["octree.bin", "hierarchy.bin", "metadata.json"])
+    out.push({ path: base + "/" + nom, content: await (await dir.getFileHandle(nom)).getFile() });
+  return out;
+}
+
+async function trabajar(tarea) { // bloquea los botones y avisa si se intenta cerrar la pestaña
+  const evitarCierre = (e) => { e.preventDefault(); e.returnValue = ""; };
+  window.addEventListener("beforeunload", evitarCierre);
+  $id("adminEnviar").disabled = $id("adminArchivo").disabled = $id("adminReintentar").disabled = true;
+  const barra = $id("adminProg"); barra.style.display = "block"; barra.value = 0;
+  try { await tarea(); }
+  catch (e) {
+    console.error(e);
+    const m = String(e.message || e);
+    if (/401|403|unauthor/i.test(m)) estado("Hugging Face rechazó el permiso. Revisa que el token tenga escritura en " + repo() + ".");
+    else if (/quota|storage limit|exceed/i.test(m)) estado("La biblioteca " + repo() + " no admite más espacio. Crea otra biblioteca y agrégala en config.js (hfRepo).");
+    else estado("Error: " + m);
+  }
+  window.removeEventListener("beforeunload", evitarCierre);
+  $id("adminEnviar").disabled = $id("adminArchivo").disabled = $id("adminReintentar").disabled = false;
+  barra.style.display = "none"; mostrarPendiente();
+}
+
+$id("adminReintentar").onclick = () => trabajar(async () => {
+  const p = pendiente(); if (!p) return;
+  let archivos;
+  try { archivos = await archivosDeCarpeta(p.carpeta, p.base); }
+  catch (e) { guardar("pendiente", ""); throw new Error("La conversión guardada ya no está en este navegador. Vuelve a subir el .las."); }
+  await subirArchivos(archivos, p.base);
+  try { await (await navigator.storage.getDirectory()).removeEntry(p.carpeta, { recursive: true }); } catch (e) {}
+  guardar("pendiente", "");
+  estado("Listo: «" + p.base.replace(/_/g, " ") + "» ya está en la biblioteca.");
+  await cargarBiblioteca();
+});
+
 $id("adminEnviar").onclick = async () => {
   const f = $id("adminArchivo").files[0];
   if (!f) { estado("Elige primero un archivo."); return; }
@@ -551,59 +650,36 @@ $id("adminEnviar").onclick = async () => {
   if (tipo === "laz") { estado("Este .laz está comprimido y no es COPC. Guárdalo como .las (sin comprimir) o conviértelo con Convertir-a-COPC.bat, y súbelo."); return; }
   if (tipo === "otro") { estado("Por ahora la página convierte archivos .las (y sube .copc.laz). Para .e57/.ply usa Convertir-a-COPC.bat."); return; }
   if (!repo()) { estado("Falta el nombre de la biblioteca (hfRepo en config.js)."); return; }
+  if (f.size > 49 * 1073741824 && tipo === "copc") { estado("Hugging Face admite hasta 50 GB por archivo. Divide la nube en bloques más pequeños."); return; }
   const base = f.name.replace(/(\.copc)?\.la[sz]$/i, "").replace(/[^\w\-]+/g, "_").replace(/^_+|_+$/g, "") || "nube";
-  $id("adminEnviar").disabled = true; $id("adminArchivo").disabled = true;
-  const barra = $id("adminProg"); barra.style.display = "block"; barra.value = 0;
-  const evitarCierre = (e) => { e.preventDefault(); e.returnValue = ""; };
-  window.addEventListener("beforeunload", evitarCierre);
-  let carpetaTmp = null;
-  try {
-    let archivos;
-    if (tipo === "copc") {
-      archivos = [{ path: base + ".copc.laz", content: f }];
-    } else {
-      carpetaTmp = "conv-" + Date.now();
+  if (pendiente() && !confirm("Hay una conversión sin subir («" + pendiente().base + "»). Si continúas se descarta. ¿Continuar?")) return;
+  await trabajar(async () => {
+    if (tipo === "copc") { await subirArchivos([{ path: base + ".copc.laz", content: f }], base); }
+    else {
       const raiz = await navigator.storage.getDirectory();
       for await (const [nom] of raiz.entries()) if (nom.startsWith("conv-")) await raiz.removeEntry(nom, { recursive: true }).catch(() => {});
-      try { const est = await navigator.storage.estimate(); if (est.quota - est.usage < f.size * 1.2) estado("Aviso: puede faltar espacio libre en el disco para convertir este archivo."); } catch (e) {}
-      const r = await convertirEnNavegador(f, carpetaTmp, (fase, avance, texto) => {
+      guardar("pendiente", "");
+      try {
+        const est = await navigator.storage.estimate();
+        const libre = est.quota - est.usage;
+        if (libre < f.size * 0.8) throw new Error("No hay espacio suficiente en el disco para convertir (" + pesoTexto(f.size) + "; libres " + pesoTexto(libre) + "). Libera espacio e inténtalo de nuevo.");
+      } catch (e) { if (/espacio/.test(e.message)) throw e; }
+      const carpeta = "conv-" + Date.now();
+      const barra = $id("adminProg");
+      const r = await convertirEnNavegador(f, carpeta, (fase, avance, texto) => {
         const pesos = { conteo: [0, 0.25], reparto: [0.25, 0.4], octree: [0.65, 0.35] }[fase] || [0, 1];
         barra.value = pesos[0] + pesos[1] * avance;
         estado(texto + "… " + (100 * avance).toFixed(0) + " %  (paso " + (["conteo", "reparto", "octree"].indexOf(fase) + 1) + " de 4; no cierres esta pestaña)");
       });
-      const dir = await raiz.getDirectoryHandle(carpetaTmp);
-      archivos = [];
-      for (const nom of ["octree.bin", "hierarchy.bin", "metadata.json"])
-        archivos.push({ path: base + "/" + nom, content: await (await dir.getFileHandle(nom)).getFile() });
+      guardar("pendiente", JSON.stringify({ carpeta, base })); // si la subida falla, no hay que convertir de nuevo
       estado("Conversión lista (" + r.puntos.toLocaleString("es") + " puntos). Subiendo…");
-    }
-    const { uploadFilesWithProgress } = await import("./libs/hf/hfhub.mjs");
-    const total = archivos.reduce((a, x) => a + x.content.size, 0);
-    const hecho = new Map();
-    for await (const ev of uploadFilesWithProgress({
-      repo: { type: "dataset", name: repo() }, accessToken: token, files: archivos,
-      commitTitle: "Subir " + base, useXet: true,
-    })) {
-      if (ev.event === "fileProgress") {
-        const x = archivos.find((a) => a.path === ev.path);
-        if (x) hecho.set(ev.path, ev.progress * x.content.size);
-        const p = [...hecho.values()].reduce((a, v) => a + v, 0) / total;
-        barra.value = p;
-        estado((ev.state === "hashing" ? "Preparando la subida… " : "Subiendo… ") + (100 * p).toFixed(1) + " %  (paso 4 de 4; no cierres esta pestaña)");
-      }
+      await subirArchivos(await archivosDeCarpeta(carpeta, base), base);
+      try { await raiz.removeEntry(carpeta, { recursive: true }); } catch (e) {}
+      guardar("pendiente", "");
     }
     estado("Listo: «" + base.replace(/_/g, " ") + "» ya está en la biblioteca.");
     await cargarBiblioteca();
-  } catch (e) {
-    console.error(e);
-    const m = String(e.message || e);
-    if (/401|403|unauthor/i.test(m)) estado("Hugging Face rechazó el permiso. Revisa que el token tenga escritura en " + repo() + ".");
-    else estado("Error: " + m);
-  }
-  if (carpetaTmp) { try { await (await navigator.storage.getDirectory()).removeEntry(carpetaTmp, { recursive: true }); } catch (e) {} }
-  window.removeEventListener("beforeunload", evitarCierre);
-  $id("adminArchivo").disabled = false;
-  $id("adminEnviar").disabled = false; barra.style.display = "none";
+  });
 };
 
 /* ---------- corte de sección ---------- */
