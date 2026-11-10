@@ -25,7 +25,7 @@
   #vp h4 { margin: 0 0 7px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #9aa3ab; font-weight: 600; }
   #vp label.fila { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
   #vp label.fila > span:first-child { flex: 0 0 74px; color: #c3c9ce; }
-  #vp label.fila > :nth-child(2) { flex: 1; min-width: 0; }
+  #vp label.fila > :nth-child(2) { flex: 1; min-width: 0; width: 100%; }
   #vp select, #vp input[type=number] {
     background: #0f1215; color: #e8eaec; border: 1px solid #3b434b; border-radius: 5px; padding: 4px 6px; font: inherit;
   }
@@ -41,6 +41,34 @@
   #vp .nube { display: block; width: 100%; text-align: left; margin: 4px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #vp .nube small { float: right; }
   #listaNubes { max-height: 34vh; overflow-y: auto; }
+  /* pestañas de bloques (abajo) */
+  #pestanas {
+    position: absolute; left: 10px; right: 290px; bottom: 10px; z-index: 999; display: flex; align-items: center; gap: 6px;
+    background: rgba(22, 26, 30, .93); border: 1px solid #333a41; border-radius: 10px; padding: 6px 8px;
+    font: 13px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #e8eaec;
+  }
+  #pestanas .titulo { color: #9aa3ab; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 0 4px; white-space: nowrap; }
+  #tiras { display: flex; gap: 6px; overflow-x: auto; flex: 1; scrollbar-width: thin; padding-bottom: 1px; }
+  .pest {
+    display: flex; align-items: center; gap: 7px; white-space: nowrap; cursor: pointer; user-select: none;
+    background: #2a3138; border: 1px solid #3b434b; color: #e8eaec; border-radius: 8px; padding: 6px 10px; font: inherit;
+  }
+  .pest:hover { background: #353d45; }
+  .pest .punto { width: 9px; height: 9px; border-radius: 50%; border: 2px solid #6b747c; flex: 0 0 auto; }
+  .pest.cargada { border-color: #e5484d; background: #3a2629; }
+  .pest.cargada .punto { background: #e5484d; border-color: #e5484d; }
+  .pest.cargando .punto { border-color: #e5484d; border-top-color: transparent; animation: gira .8s linear infinite; }
+  .pest small { color: #9aa3ab; }
+  .pest .enfocar { display: none; color: #9aa3ab; padding: 0 2px; }
+  .pest.cargada .enfocar { display: inline; }
+  .pest .enfocar:hover { color: #fff; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+  #pestanas button.mini { background: none; border: 1px solid #3b434b; color: #c3c9ce; border-radius: 7px; padding: 5px 8px; font: inherit; cursor: pointer; white-space: nowrap; }
+  #pestanas button.mini:hover { background: #2a3138; }
+  @media (max-width: 700px) { #pestanas { right: 10px; } }
+  #medidas { margin: 6px 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+  #medidas li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px solid #2a3138; }
+  #medidas li span:last-child { color: #fff; font-weight: 600; }
   .potree_menu_toggle, #potree_map_toggle, #potree_quick_buttons { display: none !important; }
   #vp .nube small { color: #9aa3ab; margin-left: auto; }
   #vp .valor { flex: 0 0 62px !important; white-space: nowrap; text-align: right; color: #9aa3ab; font-variant-numeric: tabular-nums; }
@@ -75,9 +103,9 @@
       <header id="vpCab"><b id="vpTitulo">Visor 3D</b><span id="vpFlecha">▾</span></header>
 
       <section>
-        <h4>Biblioteca de nubes</h4>
-        <div id="listaNubes"></div>
-        <p class="nota"><a href="#" id="adminLink" style="color:#9aa3ab">Administrar</a></p>
+        <h4>Biblioteca</h4>
+        <p class="nota" style="margin-top:0">Elige los bloques en la barra de abajo; puedes cargar varios a la vez.</p>
+        <p class="nota"><a href="#" id="adminLink" style="color:#9aa3ab">Administrar (subir nubes)</a></p>
         <div id="admin" style="display:none">
           <div id="adminLogin">
             <input type="password" id="adminClave" placeholder="Contraseña" style="width:100%; box-sizing:border-box; margin:4px 0" autocomplete="current-password">
@@ -135,20 +163,28 @@
           <button data-m="area">Área</button>
           <button id="borrarMed">Borrar</button>
         </div>
-        <p class="nota">Clic izquierdo para marcar puntos, clic derecho para terminar.</p>
+        <p class="nota">Clic izquierdo para marcar puntos, clic derecho para terminar. Los puntos se pueden arrastrar.</p>
+        <ul id="medidas"></ul>
       </section>
 
       <section>
         <div class="bts">
           <button id="encuadrar">Encuadrar</button>
           <button id="proyeccion">Ortográfica</button>
+          <label class="fila" style="flex:1 1 100%; margin:2px 0"><span>Tamaño</span><input type="range" style="min-width:0; width:100%" id="tamPunto" min="0.5" max="3" step="0.1" value="1.2"><span class="valor" id="tamVal">1.2</span></label>
           <select id="calidad" title="Calidad" style="flex:1 1 100%">
             <option value="baja">Calidad baja (laptop básica)</option>
-            <option value="media" selected>Calidad media</option>
-            <option value="alta">Calidad alta</option>
+            <option value="media" selected>Calidad media (suave)</option>
+            <option value="alta">Calidad alta (más definida)</option>
           </select>
         </div>
       </section>
+    </div>
+    <div id="pestanas">
+      <span class="titulo">Bloques</span>
+      <div id="tiras"><span class="titulo">Cargando biblioteca…</span></div>
+      <button class="mini" id="verTodos" title="Cargar todos los bloques">Todos</button>
+      <button class="mini" id="quitarTodos" title="Quitar todos los bloques">Ninguno</button>
     </div>
     <div id="aviso"></div>
   </div>
@@ -189,24 +225,40 @@ for (const ev of ["mousedown", "mouseup", "wheel", "dblclick", "touchstart", "po
   $id("vp").addEventListener(ev, (e) => e.stopPropagation());
 
 /* ---------- calidad ---------- */
+// Suavidad: puntos redondos siempre; en alta, "splats" de alta calidad (bordes mezclados, sin pixelado).
 const CALIDAD = {
-  baja:  { puntos:   600_000, edl: false, nodo: 60 },
-  media: { puntos: 1_500_000, edl: true,  nodo: 30 },
-  alta:  { puntos: 4_000_000, edl: true,  nodo: 15 },
+  baja:  { puntos:   700_000, edl: false, nodo: 50, hq: false },
+  media: { puntos: 2_000_000, edl: true,  nodo: 25, hq: false },
+  alta:  { puntos: 4_500_000, edl: false, nodo: 12, hq: true  },
 };
+function aplicarMaterial(pc) {
+  const m = pc.material;
+  m.shape = Potree.PointShape.CIRCLE;
+  m.pointSizeType = Potree.PointSizeType.ADAPTIVE;
+  m.size = parseFloat($id("tamPunto").value) || 1.2;
+  m.minSize = 2;
+}
 function aplicarCalidad(c) {
   const q = CALIDAD[c] || CALIDAD.media;
   viewer.setPointBudget(q.puntos);
   viewer.setEDLEnabled(q.edl);
   viewer.setMinNodeSize(q.nodo);
+  viewer.useHQ = q.hq;
   $id("calidad").value = c; guardar("calidad", c);
 }
 const equipoBasico = (navigator.deviceMemory && navigator.deviceMemory <= 4) || window.innerWidth < 700;
 aplicarCalidad(leer("calidad") || (equipoBasico ? "baja" : "media"));
 $id("calidad").onchange = (e) => aplicarCalidad(e.target.value);
+$id("tamPunto").value = leer("tamPunto") || "1.2"; $id("tamVal").textContent = $id("tamPunto").value;
+$id("tamPunto").oninput = (e) => {
+  $id("tamVal").textContent = e.target.value; guardar("tamPunto", e.target.value);
+  for (const pc of viewer.scene.pointclouds) pc.material.size = parseFloat(e.target.value);
+};
 
 /* ---------- biblioteca de nubes (Hugging Face) ---------- */
-let actual = null; // { id, pc }
+const cargadas = new Map();   // id -> { pc, conColor, rangoZ }
+const cargando = new Set();
+let nubesBiblio = [];
 const HF = "https://huggingface.co";
 const repo = () => CFG.hfRepo || "";
 const urlHF = (ruta) => `${HF}/datasets/${repo()}/resolve/main/${ruta.split("/").map(encodeURIComponent).join("/")}`;
@@ -259,12 +311,26 @@ window.fetch = async (entrada, opciones = {}) => {
   return _fetch(abs, { headers: { Range: rango } });
 };
 
-function marcarActiva() {
-  document.querySelectorAll("#listaNubes .nube").forEach((b) => b.classList.toggle("activo", !!actual && b.dataset.id === actual.id));
+function marcarPestanas() {
+  document.querySelectorAll("#tiras .pest").forEach((p) => {
+    p.classList.toggle("cargada", cargadas.has(p.dataset.id));
+    p.classList.toggle("cargando", cargando.has(p.dataset.id));
+  });
+  const u = new URL(location.href);
+  if (cargadas.size) u.searchParams.set("nube", [...cargadas.keys()].join(",")); else u.searchParams.delete("nube");
+  history.replaceState(null, "", u);
 }
 
-async function abrirNube(n) {
-  if (actual && actual.id === n.id) return;
+// misma escala de colores por altura en todos los bloques cargados
+function unificarAlturas() {
+  let lo = Infinity, hi = -Infinity;
+  for (const c of cargadas.values()) if (!c.conColor && c.rangoZ) { lo = Math.min(lo, c.rangoZ[0]); hi = Math.max(hi, c.rangoZ[1]); }
+  if (lo < hi) for (const c of cargadas.values()) if (!c.conColor) c.pc.material.elevationRange = [lo, hi];
+}
+
+async function cargarNube(n, { encuadrar = false } = {}) {
+  if (cargadas.has(n.id) || cargando.has(n.id)) return;
+  cargando.add(n.id); marcarPestanas();
   aviso("Cargando «" + n.nombre + "»…", false, true);
   try {
     let pc, conColor, rangoZ = null;
@@ -289,31 +355,34 @@ async function abrirNube(n) {
       if (copc.header && copc.header.min) rangoZ = [copc.header.min[2], copc.header.max[2]];
     }
     pc.name = n.nombre;
-    pc.material.size = 1;
-    pc.material.pointSizeType = Potree.PointSizeType.ADAPTIVE;
-    pc.material.shape = Potree.PointShape.SQUARE;
+    aplicarMaterial(pc);
     pc.material.activeAttributeName = conColor ? "rgba" : "elevation";
-    if (actual) { // cierra la nube anterior
-      viewer.scene.scenePointCloud.remove(actual.pc);
-      const i = viewer.scene.pointclouds.indexOf(actual.pc);
-      if (i >= 0) viewer.scene.pointclouds.splice(i, 1);
-      viewer.scene.removeAllMeasurements();
-    }
-    viewer.scene.addPointCloud(pc);
-    if (!conColor) { // colorear por altura usando el rango real de la nube
+    if (!conColor) {
       if (!rangoZ) { const bb = viewer.getBoundingBox([pc]); rangoZ = [bb.min.z, bb.max.z]; }
-      pc.material.elevationRange = rangoZ;
       if (Potree.Gradients && Potree.Gradients.TURBO) pc.material.gradient = Potree.Gradients.TURBO;
     }
-    actual = { id: n.id, pc };
-    viewer.fitToScreen(0.6);
-    actualizarCorte(); marcarActiva();
-    const u = new URL(location.href); u.searchParams.set("nube", n.id); history.replaceState(null, "", u);
+    const primera = cargadas.size === 0;
+    viewer.scene.addPointCloud(pc);
+    cargadas.set(n.id, { pc, conColor, rangoZ });
+    unificarAlturas();
+    if (primera || encuadrar) viewer.zoomTo(pc, 1.1, 600);
+    actualizarCorte();
     aviso("");
   } catch (e) {
     console.error(e);
     aviso("«" + n.nombre + "»: " + (e.message || e), true);
   }
+  cargando.delete(n.id); marcarPestanas();
+}
+
+function quitarNube(id) {
+  const c = cargadas.get(id);
+  if (!c) return;
+  viewer.scene.scenePointCloud.remove(c.pc);
+  const i = viewer.scene.pointclouds.indexOf(c.pc);
+  if (i >= 0) viewer.scene.pointclouds.splice(i, 1);
+  cargadas.delete(id);
+  unificarAlturas(); actualizarCorte(); marcarPestanas();
 }
 
 const pesoTexto = (b) => !b ? "" : b >= 1073741824 ? (b / 1073741824).toFixed(1) + " GB" : Math.max(1, Math.round(b / 1048576)) + " MB";
@@ -345,24 +414,36 @@ async function cargarBiblioteca() {
   let nubes = [...(CFG.nubes || [])];
   try { nubes = nubes.concat(await listarHF()); }
   catch (e) { console.error(e); aviso(e.message, true); }
-  const lista = $id("listaNubes");
-  lista.textContent = "";
-  if (!nubes.length) { lista.textContent = "Todavía no hay nubes en la biblioteca."; return; }
+  nubesBiblio = nubes;
+  const tiras = $id("tiras");
+  tiras.textContent = "";
+  if (!nubes.length) { tiras.innerHTML = '<span class="titulo">Todavía no hay nubes en la biblioteca</span>'; return; }
   for (const n of nubes) {
-    const b = document.createElement("button");
-    b.className = "nube"; b.dataset.id = n.id; b.title = n.nombre;
-    if (n.peso) { const s = document.createElement("small"); s.textContent = n.peso; b.append(s); }
-    b.append(document.createTextNode(n.nombre));
-    b.onclick = () => abrirNube(n);
-    lista.append(b);
+    const p = document.createElement("div");
+    p.className = "pest"; p.dataset.id = n.id; p.title = "Clic: cargar / quitar · Doble clic: ir al bloque";
+    const punto = document.createElement("span"); punto.className = "punto";
+    const nom = document.createElement("span"); nom.textContent = n.nombre;
+    p.append(punto, nom);
+    if (n.peso) { const sm = document.createElement("small"); sm.textContent = n.peso; p.append(sm); }
+    const enf = document.createElement("span"); enf.className = "enfocar"; enf.textContent = "⌖"; enf.title = "Ir a este bloque";
+    enf.onclick = (e) => { e.stopPropagation(); const c = cargadas.get(n.id); if (c) viewer.zoomTo(c.pc, 1.1, 600); };
+    p.append(enf);
+    p.onclick = () => (cargadas.has(n.id) ? quitarNube(n.id) : cargarNube(n));
+    p.ondblclick = () => { const c = cargadas.get(n.id); if (c) viewer.zoomTo(c.pc, 1.1, 600); else cargarNube(n, { encuadrar: true }); };
+    tiras.append(p);
   }
-  marcarActiva();
+  marcarPestanas();
   if (!primeraVez) return;
   primeraVez = false;
-  const pedido = new URLSearchParams(location.search).get("nube");
-  const ini = nubes.find((n) => n.id === pedido) || (nubes.length === 1 ? nubes[0] : null);
-  if (ini) abrirNube(ini);
+  const pedidas = (new URLSearchParams(location.search).get("nube") || "").split(",").filter(Boolean);
+  const iniciales = nubes.filter((n) => pedidas.includes(n.id));
+  if (!iniciales.length && nubes.length) iniciales.push(nubes[0]);
+  for (const n of iniciales) cargarNube(n);
 }
+$id("verTodos").onclick = () => { for (const n of nubesBiblio) cargarNube(n); };
+$id("quitarTodos").onclick = () => { for (const id of [...cargadas.keys()]) quitarNube(id); };
+for (const ev of ["mousedown", "mouseup", "wheel", "dblclick", "touchstart", "pointerdown", "contextmenu", "keydown"])
+  $id("pestanas").addEventListener(ev, (e) => e.stopPropagation());
 cargarBiblioteca();
 
 /* ---------- administración: contraseña + subida a Hugging Face ---------- */
@@ -607,6 +688,31 @@ const MED = {
 for (const bt of document.querySelectorAll("button[data-m]"))
   bt.onclick = () => viewer.measuringTool.startInsertion(MED[bt.dataset.m]);
 $id("borrarMed").onclick = () => viewer.scene.removeAllMeasurements();
+const fmtM = (v) => v.toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+let firmaMed = "";
+setInterval(() => { // lista de resultados (se actualiza al mover puntos)
+  const filas = [];
+  const cuenta = {};
+  for (const m of viewer.scene.measurements) {
+    const pts = m.points.map((p) => p.position);
+    let tipo, valor;
+    if (m.showArea) { tipo = "Área"; valor = pts.length >= 3 ? fmtM(m.getArea()) + " m²" : "…"; }
+    else if (m.showHeight) { tipo = "Altura"; valor = pts.length >= 2 ? fmtM(Math.abs(pts[1].z - pts[0].z)) + " m" : "…"; }
+    else { tipo = "Distancia"; valor = pts.length >= 2 ? fmtM(m.getTotalDistance()) + " m" : "…"; }
+    cuenta[tipo] = (cuenta[tipo] || 0) + 1;
+    filas.push([tipo + " " + cuenta[tipo], valor]);
+  }
+  const firma = JSON.stringify(filas);
+  if (firma === firmaMed) return;
+  firmaMed = firma;
+  const ul = $id("medidas"); ul.textContent = "";
+  for (const [a, b] of filas) {
+    const li = document.createElement("li");
+    const x = document.createElement("span"); x.textContent = a;
+    const y = document.createElement("span"); y.textContent = b;
+    li.append(x, y); ul.append(li);
+  }
+}, 400);
 
 /* ---------- vista ---------- */
 function ortografica(si) {
