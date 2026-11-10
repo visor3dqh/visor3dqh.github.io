@@ -8,15 +8,14 @@ Incluye: corte de sección (planta / vertical, con giro, grosor y color de líne
 rojo por defecto), medición (distancia, altura, área, ángulo), vista ortográfica,
 varias nubes a la vez y tres niveles de calidad.
 
-## 1. Convertir cada nube a COPC (una sola vez, en Windows)
+## 1. Formatos que acepta la página
 
-El visor transmite el formato **COPC** (`.copc.laz`). Para convertir `.las`, `.laz`, `.e57`, `.ply`…:
-
-1. Instala **QGIS** (gratis): <https://qgis.org/download/>.
-2. Arrastra tus archivos sobre **`herramientas/Convertir-a-COPC.bat`** (también se descarga desde
-   Administrar en el visor). Crea `nombre.copc.laz` junto a cada archivo.
-
-Alternativa sin el .bat: abre la nube en QGIS; al cargarla crea `nombre.copc.laz` en la misma carpeta.
+- **`.las`**: Administrar → elegir el archivo → *Subir*. La página lo convierte ahí mismo
+  (formato octree de Potree, por partes y sin cargarlo entero en memoria) y sube el resultado.
+  Usa espacio temporal del navegador (≈ el tamaño del .las) y se borra al terminar.
+- **`.copc.laz`**: se sube tal cual.
+- **`.laz` comprimido, `.e57`, `.ply`**: convertir antes con `herramientas/Convertir-a-COPC.bat`
+  (arrastrar encima; usa QGIS, gratis) y subir el `.copc.laz`.
 
 ## 2. Biblioteca en Hugging Face (gratis)
 
