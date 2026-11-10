@@ -42,12 +42,11 @@ biblioteca. Los visitantes solo pueden abrir y medir; subir o borrar requiere la
    - Una nube concreta: `...?nube=bloque-a`
    - Varias: `...?nube=bloque-a,bloque-b`
 
-## Si Drive falla
+## Límites
 
-El visor avisa con el motivo (permiso, clave o cuota). Drive limita las descargas de
-archivos muy solicitados; si llegas a ese límite, cualquier almacenamiento que permita
-lectura por partes sirve sin tocar el visor: pon `url: "https://..."` en lugar de
-`driveId` (por ejemplo Cloudflare R2, que tiene capa gratuita).
+Hugging Face da almacenamiento público gratuito "best-effort" (sin tope fijo publicado, con
+controles contra abuso) y hasta 50 GB por archivo. Si alguna vez bloquea, cualquier servidor con
+lectura por partes sirve: agrega la nube en `nubes` con su `url`.
 
 ## Probar en tu PC
 
