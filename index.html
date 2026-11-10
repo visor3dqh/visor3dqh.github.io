@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Visor 3D</title>
+<link rel="stylesheet" href="build/potree/potree.css">
+<link rel="stylesheet" href="libs/jquery-ui/jquery-ui.min.css">
+<link rel="stylesheet" href="libs/openlayers3/ol.css">
+<link rel="stylesheet" href="libs/spectrum/spectrum.css">
+<link rel="stylesheet" href="libs/jstree/themes/mixed/style.css">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #14171a; }
+  #vp {
+    position: absolute; top: 10px; right: 10px; z-index: 1000; width: 270px; max-width: calc(100vw - 20px);
+    max-height: calc(100% - 20px); overflow-y: auto; box-sizing: border-box;
+    background: rgba(22, 26, 30, .93); color: #e8eaec; border: 1px solid #333a41; border-radius: 8px;
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  #vp header { display: flex; align-items: center; padding: 9px 12px; cursor: pointer; user-select: none; }
+  #vp header b { flex: 1; font-size: 14px; }
+  #vp header span { color: #9aa3ab; }
+  #vp.cerrado section { display: none; }
+  #vp section { padding: 10px 12px; border-top: 1px solid #333a41; }
+  #vp h4 { margin: 0 0 7px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #9aa3ab; font-weight: 600; }
+  #vp label.fila { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+  #vp label.fila > span:first-child { flex: 0 0 74px; color: #c3c9ce; }
+  #vp label.fila > :nth-child(2) { flex: 1; min-width: 0; }
+  #vp select, #vp input[type=number] {
+    background: #0f1215; color: #e8eaec; border: 1px solid #3b434b; border-radius: 5px; padding: 4px 6px; font: inherit;
+  }
+  #vp input[type=range] { accent-color: #e5484d; }
+  #vp input[type=color] { width: 36px; height: 24px; padding: 0; border: 1px solid #3b434b; border-radius: 4px; background: none; flex: 0 0 auto !important; }
+  #vp .bts { display: flex; flex-wrap: wrap; gap: 6px; }
+  #vp button {
+    flex: 1 1 auto; background: #2a3138; color: #e8eaec; border: 1px solid #3b434b; border-radius: 5px;
+    padding: 6px 8px; font: inherit; cursor: pointer;
+  }
+  #vp button:hover { background: #353d45; }
+  #vp button.activo { background: #e5484d; border-color: #e5484d; color: #fff; }
+  #vp .nube { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
+  #vp .nube small { color: #9aa3ab; margin-left: auto; }
+  #vp .valor { flex: 0 0 62px !important; white-space: nowrap; text-align: right; color: #9aa3ab; font-variant-numeric: tabular-nums; }
+  #vp .nota { color: #9aa3ab; font-size: 12px; margin: 6px 0 0; }
+  #aviso {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 1001; max-width: min(560px, calc(100vw - 30px));
+    background: rgba(22, 26, 30, .95); color: #e8eaec; border: 1px solid #333a41; border-radius: 8px; padding: 9px 14px;
+    font: 13px/1.4 system-ui, sans-serif; display: none;
+  }
+  #aviso.error { border-color: #e5484d; }
+</style>
+</head>
+<body>
+<script src="libs/jquery/jquery-3.1.1.min.js"></script>
+<script src="libs/spectrum/spectrum.js"></script>
+<script src="libs/jquery-ui/jquery-ui.min.js"></script>
+<script src="libs/other/BinaryHeap.js"></script>
+<script src="libs/tween/tween.min.js"></script>
+<script src="libs/d3/d3.js"></script>
+<script src="libs/proj4/proj4.js"></script>
+<script src="libs/openlayers3/ol.js"></script>
+<script src="libs/i18next/i18next.js"></script>
+<script src="libs/jstree/jstree.js"></script>
+<script src="libs/copc/index.js"></script>
+<script src="build/potree/potree.js"></script>
+<script src="libs/plasio/js/laslaz.js"></script>
+<script src="config.js"></script>
+
+<div class="potree_container" style="position:absolute; width:100%; height:100%; left:0; top:0;">
+  <div id="potree_render_area">
+    <div id="vp">
+      <header id="vpCab"><b id="vpTitulo">Visor 3D</b><span id="vpFlecha">▾</span></header>
+
+      <section>
+        <h4>Nubes de puntos</h4>
+        <div id="listaNubes"></div>
+        <label class="fila"><span>Calidad</span>
+          <select id="calidad">
+            <option value="baja">Baja (laptop básica)</option>
+            <option value="media" selected>Media</option>
+            <option value="alta">Alta</option>
+          </select></label>
+        <label class="fila"><span>Color</span>
+          <select id="colorPor">
+            <option value="rgba">Color real (RGB)</option>
+            <option value="elevation">Altura</option>
+            <option value="intensity">Intensidad</option>
+          </select></label>
+      </section>
+
+      <section>
+        <h4>Corte de sección</h4>
+        <div class="bts" id="tipoCorte">
+          <button data-t="0" class="activo">Sin corte</button>
+          <button data-t="planta">Planta</button>
+          <button data-t="vertical">Vertical</button>
+        </div>
+        <div id="opcCorte" style="display:none">
+          <label class="fila"><span>Mostrar</span>
+            <select id="modoCorte">
+              <option value="2">Cortar (ocultar un lado)</option>
+              <option value="1">Solo marcar la línea</option>
+              <option value="3">Solo la franja</option>
+            </select></label>
+          <label class="fila"><span>Posición</span><input type="range" id="posCorte" min="0" max="1000" value="500"><span class="valor" id="posVal"></span></label>
+          <label class="fila" id="filaAng"><span>Giro</span><input type="range" id="angCorte" min="0" max="180" step="0.5" value="0"><span class="valor" id="angVal">0°</span></label>
+          <label class="fila"><span>Grosor (m)</span><input type="number" id="grosorCorte" min="0.005" max="20" step="0.01" value="0.10"></label>
+          <label class="fila"><span>Color línea</span><input type="color" id="colorCorte" value="#ff0000"><span></span></label>
+          <div class="bts" style="margin-top:7px">
+            <button id="invertir">Invertir lado</button>
+            <button id="verFrente">Ver de frente</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h4>Medir</h4>
+        <div class="bts">
+          <button data-m="distancia">Distancia</button>
+          <button data-m="altura">Altura</button>
+          <button data-m="area">Área</button>
+          <button data-m="angulo">Ángulo</button>
+          <button id="borrarMed">Borrar</button>
+        </div>
+        <p class="nota">Clic izquierdo para marcar puntos, clic derecho para terminar.</p>
+      </section>
+
+      <section>
+        <h4>Vista</h4>
+        <div class="bts">
+          <button id="encuadrar">Encuadrar</button>
+          <button id="proyeccion">Ortográfica</button>
+          <button id="masOpc">Más herramientas</button>
+        </div>
+      </section>
+    </div>
+    <div id="aviso"></div>
+  </div>
+  <div id="potree_sidebar_container"></div>
+</div>
+
+<script type="module">
+import * as THREE from "./libs/three.js/build/three.module.js";
+
+const CFG = window.VISOR_CONFIG || { nubes: [] };
+const $id = (x) => document.getElementById(x);
+const guardar = (k, v) => { try { localStorage.setItem("visor3d." + k, v); } catch (e) {} };
+const leer = (k) => { try { return localStorage.getItem("visor3d." + k); } catch (e) { return null; } };
+
+/* ---------- avisos ---------- */
+let tAviso = null;
+function aviso(texto, error = false, fijo = false) {
+  const el = $id("aviso");
+  el.textContent = texto; el.className = error ? "error" : ""; el.style.display = texto ? "block" : "none";
+  clearTimeout(tAviso);
+  if (texto && !fijo) tAviso = setTimeout(() => (el.style.display = "none"), error ? 15000 : 4000);
+}
+
+/* ---------- visor ---------- */
+const viewer = new Potree.Viewer($id("potree_render_area"));
+window.viewer = viewer;
+viewer.setFOV(60);
+viewer.setBackground("gradient");
+viewer.setMinNodeSize(30);
+viewer.loadGUI(() => {
+  viewer.setLanguage("es");
+  $("#menu_tools").next().show();
+});
+
+document.title = CFG.titulo || "Visor 3D";
+$id("vpTitulo").textContent = CFG.titulo || "Visor 3D";
+$id("vpCab").onclick = () => {
+  const c = $id("vp").classList.toggle("cerrado");
+  $id("vpFlecha").textContent = c ? "▸" : "▾";
+};
+if (window.innerWidth < 700) $id("vpCab").onclick();
+// que los clics en el panel no lleguen al visor 3D
+for (const ev of ["mousedown", "mouseup", "wheel", "dblclick", "touchstart", "pointerdown", "contextmenu", "keydown"])
+  $id("vp").addEventListener(ev, (e) => e.stopPropagation());
+
+/* ---------- calidad ---------- */
+const CALIDAD = {
+  baja:  { puntos:   600_000, edl: false, nodo: 60 },
+  media: { puntos: 1_500_000, edl: true,  nodo: 30 },
+  alta:  { puntos: 4_000_000, edl: true,  nodo: 15 },
+};
+function aplicarCalidad(c) {
+  const q = CALIDAD[c] || CALIDAD.media;
+  viewer.setPointBudget(q.puntos);
+  viewer.setEDLEnabled(q.edl);
+  viewer.setMinNodeSize(q.nodo);
+  $id("calidad").value = c; guardar("calidad", c);
+}
+const equipoBasico = (navigator.deviceMemory && navigator.deviceMemory <= 4) || window.innerWidth < 700;
+aplicarCalidad(leer("calidad") || (equipoBasico ? "baja" : "media"));
+$id("calidad").onchange = (e) => aplicarCalidad(e.target.value);
+
+$id("colorPor").onchange = (e) => {
+  for (const pc of viewer.scene.pointclouds) pc.material.activeAttributeName = e.target.value;
+};
+
+/* ---------- nubes ---------- */
+const cargadas = new Map(); // id -> pointcloud
+
+function urlDe(n) {
+  if (n.url) return n.url;
+  if (!CFG.driveApiKey) throw new Error("Falta la clave de la API de Drive en config.js (driveApiKey).");
+  return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(n.driveId)}?alt=media&key=${encodeURIComponent(CFG.driveApiKey)}`;
+}
+
+async function comprobar(url) {
+  // pide solo los primeros bytes: confirma acceso y lectura por partes
+  let r;
+  try { r = await fetch(url, { headers: { Range: "bytes=0-1023" } }); }
+  catch (e) { throw new Error("No se pudo conectar con el archivo (red o permisos del navegador)."); }
+  if (r.status === 206) return;
+  if (r.status === 200) throw new Error("El servidor no permite lectura por partes; el archivo no se puede transmitir.");
+  if (r.status === 404) throw new Error("Archivo no encontrado: revisa el ID y que esté compartido como «Cualquier persona con el enlace».");
+  if (r.status === 403) throw new Error("Acceso denegado (403): revisa la clave de API, su restricción de dominio, o la cuota de descargas de Drive.");
+  if (r.status === 400) throw new Error("Clave de API no válida (400).");
+  throw new Error("Error " + r.status + " al leer el archivo.");
+}
+
+async function cargarNube(n) {
+  if (cargadas.has(n.id)) return;
+  aviso("Cargando «" + n.nombre + "»…", false, true);
+  try {
+    const url = urlDe(n);
+    await comprobar(url);
+    const geometry = await new Promise((ok, mal) => {
+      Potree.CopcLoader.load(url, (g) => (g ? ok(g) : mal(new Error("No se pudo leer la nube.")))).catch(mal);
+    });
+    const pc = new Potree.PointCloudOctree(geometry);
+    pc.name = n.nombre;
+    pc.material.size = 1;
+    pc.material.pointSizeType = Potree.PointSizeType.ADAPTIVE;
+    pc.material.shape = Potree.PointShape.SQUARE;
+    pc.material.activeAttributeName = $id("colorPor").value;
+    viewer.scene.addPointCloud(pc);
+    cargadas.set(n.id, pc);
+    if (cargadas.size === 1) viewer.fitToScreen(0.6);
+    actualizarCorte();
+    aviso("");
+  } catch (e) {
+    console.error(e);
+    const chk = document.querySelector(`#listaNubes input[data-id="${n.id}"]`);
+    if (chk) chk.checked = false;
+    aviso("«" + n.nombre + "»: " + (e.message || e), true);
+  }
+  actualizarLink();
+}
+
+function quitarNube(n) {
+  const pc = cargadas.get(n.id);
+  if (!pc) return;
+  viewer.scene.scenePointCloud.remove(pc);
+  const i = viewer.scene.pointclouds.indexOf(pc);
+  if (i >= 0) viewer.scene.pointclouds.splice(i, 1);
+  cargadas.delete(n.id);
+  actualizarCorte(); actualizarLink();
+}
+
+function actualizarLink() {
+  const u = new URL(location.href);
+  u.searchParams.set("nube", [...cargadas.keys()].join(","));
+  history.replaceState(null, "", u);
+}
+
+const pedido = new URLSearchParams(location.search).get("nube");
+const iniciales = pedido !== null ? pedido.split(",") : (CFG.inicial || []);
+for (const n of CFG.nubes) {
+  const fila = document.createElement("label");
+  fila.className = "nube";
+  const chk = document.createElement("input");
+  chk.type = "checkbox"; chk.dataset.id = n.id;
+  chk.onchange = () => (chk.checked ? cargarNube(n) : quitarNube(n));
+  fila.append(chk, document.createTextNode(n.nombre));
+  $id("listaNubes").append(fila);
+  if (iniciales.includes(n.id)) { chk.checked = true; cargarNube(n); }
+}
+if (!CFG.nubes.length) $id("listaNubes").textContent = "Agrega tus nubes en config.js";
+
+/* ---------- corte de sección ---------- */
+const sec = window.VisorSeccion = { mode: 0, normal: [0, 0, 1], point: [0, 0, 0], thickness: 0.1, color: [1, 0, 0] };
+let tipo = "0", lado = 1;
+
+const marco = new THREE.LineLoop(
+  new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute([-.5,-.5,0, .5,-.5,0, .5,.5,0, -.5,.5,0], 3)),
+  new THREE.LineBasicMaterial({ color: 0xff0000, depthTest: false })
+);
+marco.visible = false; marco.renderOrder = 10;
+viewer.scene.scene.add(marco);
+
+function hexARgb(h) { return [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16) / 255); }
+
+function cajaTotal() {
+  const bb = viewer.getBoundingBox(viewer.scene.pointclouds);
+  return new THREE.Box3(new THREE.Vector3().copy(bb.min), new THREE.Vector3().copy(bb.max));
+}
+
+function actualizarCorte() {
+  $id("opcCorte").style.display = tipo === "0" ? "none" : "block";
+  $id("filaAng").style.display = tipo === "vertical" ? "flex" : "none";
+  if (tipo === "0" || !viewer.scene.pointclouds.length) { sec.mode = 0; marco.visible = false; return; }
+
+  const b = cajaTotal(), c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
+  const ang = (parseFloat($id("angCorte").value) * Math.PI) / 180;
+  const n = tipo === "planta" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0);
+  // recorrido del plano: proyección de la caja sobre la normal
+  const medio = (Math.abs(n.x) * s.x + Math.abs(n.y) * s.y + Math.abs(n.z) * s.z) / 2;
+  const t = (parseFloat($id("posCorte").value) / 1000 - 0.5) * 2 * medio;
+  const p = c.clone().addScaledVector(n, t);
+
+  sec.mode = parseInt($id("modoCorte").value);
+  sec.normal = [n.x * lado, n.y * lado, n.z * lado];
+  sec.point = [p.x, p.y, p.z];
+  sec.thickness = Math.max(0.001, parseFloat($id("grosorCorte").value) || 0.1);
+  sec.color = hexARgb($id("colorCorte").value);
+
+  $id("posVal").textContent = tipo === "planta" ? p.z.toFixed(2) + " m" : (t + medio).toFixed(2) + " m";
+  $id("angVal").textContent = $id("angCorte").value + "°";
+
+  // marco del plano de corte
+  marco.material.color.setRGB(...sec.color);
+  marco.position.copy(p);
+  if (tipo === "planta") { marco.rotation.set(0, 0, 0); marco.scale.set(s.x, s.y, 1); }
+  else {
+    const ancho = Math.abs(n.y) * s.x + Math.abs(n.x) * s.y;
+    marco.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(
+      new THREE.Vector3(-n.y, n.x, 0), new THREE.Vector3(0, 0, 1), n));
+    marco.scale.set(ancho, s.z, 1);
+  }
+  marco.visible = true;
+}
+
+for (const bt of document.querySelectorAll("#tipoCorte button")) bt.onclick = () => {
+  tipo = bt.dataset.t;
+  document.querySelectorAll("#tipoCorte button").forEach((x) => x.classList.toggle("activo", x === bt));
+  actualizarCorte();
+};
+for (const idc of ["modoCorte", "posCorte", "angCorte", "grosorCorte", "colorCorte"]) $id(idc).oninput = actualizarCorte;
+$id("invertir").onclick = () => { lado = -lado; actualizarCorte(); };
+$id("verFrente").onclick = () => {
+  if (!sec.mode) return;
+  const b = cajaTotal(), r = b.getSize(new THREE.Vector3()).length();
+  const p = new THREE.Vector3(...sec.point), n = new THREE.Vector3(...sec.normal);
+  const pos = p.clone().addScaledVector(n, r);
+  if (tipo === "planta") pos.y -= r * 0.001; // evita la vista exactamente vertical
+  ortografica(true);
+  viewer.scene.view.setView(pos, p, 400);
+};
+const c0 = CFG.corte || {};
+if (c0.color) $id("colorCorte").value = c0.color;
+if (c0.grosor) $id("grosorCorte").value = c0.grosor;
+
+/* ---------- medir ---------- */
+const MED = {
+  distancia: { showDistances: true, closed: false, name: "Distancia" },
+  altura:    { showDistances: false, showHeight: true, showArea: false, closed: false, maxMarkers: 2, name: "Altura" },
+  area:      { showDistances: true, showArea: true, closed: true, name: "Área" },
+  angulo:    { showDistances: false, showAngles: true, showArea: false, closed: true, maxMarkers: 3, name: "Ángulo" },
+};
+for (const bt of document.querySelectorAll("button[data-m]"))
+  bt.onclick = () => viewer.measuringTool.startInsertion(MED[bt.dataset.m]);
+$id("borrarMed").onclick = () => viewer.scene.removeAllMeasurements();
+
+/* ---------- vista ---------- */
+function ortografica(si) {
+  viewer.setCameraMode(si ? Potree.CameraMode.ORTHOGRAPHIC : Potree.CameraMode.PERSPECTIVE);
+  $id("proyeccion").textContent = si ? "Perspectiva" : "Ortográfica";
+  $id("proyeccion").dataset.o = si ? "1" : "";
+}
+$id("proyeccion").onclick = () => ortografica(!$id("proyeccion").dataset.o);
+$id("encuadrar").onclick = () => viewer.fitToScreen(0.6);
+$id("masOpc").onclick = () => viewer.toggleSidebar();
+</script>
+</body>
+</html>
