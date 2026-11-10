@@ -10,14 +10,13 @@ varias nubes a la vez y tres niveles de calidad.
 
 ## 1. Convertir cada nube a COPC (una sola vez, en Windows)
 
-El visor lee el formato **COPC** (`.copc.laz`): un LAZ ordenado por niveles de detalle.
+El visor transmite el formato **COPC** (`.copc.laz`). Para convertir `.las`, `.laz`, `.e57`, `.ply`…:
 
-- **Opción fácil – QGIS** (gratis): arrastra tu `.las/.laz` a QGIS. Al indexarlo crea
-  automáticamente `nombre.copc.laz` junto al archivo original.
-- **Opción por comando – PDAL** (viene con QGIS, en "OSGeo4W Shell"):
-  `pdal translate entrada.las salida.copc.laz`
+1. Instala **QGIS** (gratis): <https://qgis.org/download/>.
+2. Arrastra tus archivos sobre **`herramientas/Convertir-a-COPC.bat`** (también se descarga desde
+   Administrar en el visor). Crea `nombre.copc.laz` junto a cada archivo.
 
-El archivo debe terminar en `.copc.laz`. Suele pesar menos que el LAS original.
+Alternativa sin el .bat: abre la nube en QGIS; al cargarla crea `nombre.copc.laz` en la misma carpeta.
 
 ## 2. Biblioteca en Hugging Face (gratis)
 

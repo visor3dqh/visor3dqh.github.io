@@ -91,9 +91,12 @@
             <button id="cfgCifrar" style="width:100%">Configurar este equipo</button>
           </div>
           <div id="adminSubir" style="display:none">
-            <input type="file" id="adminArchivo" accept=".laz" style="width:100%; margin:6px 0">
+            <input type="file" id="adminArchivo" accept=".laz,.las,.e57,.ply,.pts,.xyz,.txt" style="width:100%; margin:6px 0">
             <button id="adminEnviar" style="width:100%">Subir a la biblioteca</button>
             <progress id="adminProg" max="1" value="0" style="width:100%; display:none; margin-top:6px"></progress>
+            <p class="nota">¿Tienes un .las, .laz normal, .e57 o .ply? Conviértelo primero con
+              <a href="herramientas/Convertir-a-COPC.bat" download style="color:#e8eaec">Convertir-a-COPC.bat</a>
+              (arrastra tus archivos encima; usa QGIS, gratis).</p>
             <button id="adminSalir" style="width:100%; margin-top:6px">Cerrar sesión</button>
           </div>
           <p class="nota" id="adminEstado"></p>
@@ -394,9 +397,20 @@ $id("cfgCifrar").onclick = async () => {
 $id("adminEnviar").onclick = async () => {
   const f = $id("adminArchivo").files[0];
   if (!f) { estado("Elige primero un archivo."); return; }
-  if (!/\.copc\.laz$/i.test(f.name)) { estado("Este archivo no está convertido. El visor necesita .copc.laz: convierte tu .las en tu PC y sube el resultado."); return; }
+  // ¿Es COPC? Se revisa la cabecera del archivo (VLR "copc" justo después de la cabecera LAS 1.4)
+  let esCopc = false;
+  try {
+    const h = new Uint8Array(await f.slice(0, 400).arrayBuffer());
+    const txt = (i, n) => String.fromCharCode(...h.subarray(i, i + n)).replace(/\0+$/, "");
+    esCopc = txt(0, 4) === "LASF" && txt(377, 4) === "copc";
+  } catch (e) {}
+  if (!esCopc) {
+    const ext = (f.name.split(".").pop() || "").toLowerCase();
+    estado("«" + f.name + "» es un ." + ext + " normal. Para verlo en el visor hay que convertirlo a COPC: descarga «Convertir-a-COPC.bat» (enlace de arriba), arrastra tu archivo encima y sube el .copc.laz que crea.");
+    return;
+  }
   if (!repo()) { estado("Falta el nombre de la biblioteca (hfRepo en config.js)."); return; }
-  const nombre = f.name.replace(/[^\w.\- ]+/g, "_");
+  const nombre = f.name.replace(/(\.copc)?\.laz$/i, "").replace(/[^\w.\- ]+/g, "_") + ".copc.laz";
   $id("adminEnviar").disabled = true;
   const barra = $id("adminProg"); barra.style.display = "block"; barra.value = 0;
   try {
