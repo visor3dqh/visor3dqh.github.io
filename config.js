@@ -17,7 +17,7 @@ window.VISOR_CONFIG = {
   // BIBLIOTECA: ID de la carpeta de Drive donde subes las nubes (.copc.laz).
   // Todo archivo .copc.laz que pongas en esa carpeta aparece solo en el visor.
   // La carpeta debe estar compartida como "Cualquier persona con el enlace (Lector)".
-  driveFolderId: "",
+  driveFolderId: "1m8EXZCb1gNDTO2hYHRIbPUt_5dJiDxlI",
 
   // Nubes fijas adicionales (opcional). La de ejemplo puedes borrarla
   // cuando tu biblioteca de Drive ya tenga nubes.
