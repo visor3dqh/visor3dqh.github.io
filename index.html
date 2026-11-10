@@ -332,7 +332,7 @@ async function asegurarCarpeta() {
   const id = (await r.json()).id;
   await g(`${API}/${id}/permissions`, { method: "POST", body: JSON.stringify({ role: "reader", type: "anyone" }) });
   guardar("carpeta", id);
-  estado("Carpeta creada en tu Drive. Copia este ID en config.js (driveFolderId): " + id);
+  estado("Carpeta creada en tu Drive. ID: " + id); console.log("CARPETA_ID=" + id);
 }
 
 function enviarTrozo(url, trozo, inicio, total, progreso) {
