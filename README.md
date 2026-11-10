@@ -39,6 +39,19 @@ biblioteca. Los visitantes solo pueden abrir y medir; subir o borrar requiere la
    - Una nube concreta: `...?nube=bloque-a`
    - Varias: `...?nube=bloque-a,bloque-b`
 
+## Protección
+
+- **Cifrado de extremo a extremo**: cada nube se cifra en el navegador (AES-256) antes de subirla.
+  Lo que guarda Hugging Face es ilegible: descargar los archivos de la biblioteca no sirve en ningún
+  programa. El visor descifra solo el trozo que muestra, en memoria.
+- **Bloques subidos antes del cifrado**: Administrar → *Proteger N bloques sin cifrar* (los cifra,
+  reemplaza y borra la versión legible del historial).
+- **Página**: política de seguridad estricta (CSP: solo se ejecuta código propio y solo se conecta a
+  Hugging Face), no se puede incrustar en otras webs, sin menú contextual ni atajos de guardado.
+- **Límite honesto**: sin contraseña de visitante, la clave tiene que estar en la página; alguien con
+  conocimientos técnicos y tiempo podría extraerla. El cifrado frena la descarga directa y casual.
+- **Subir / borrar**: solo con el token, guardado cifrado únicamente en el equipo del administrador.
+
 ## Eliminar bloques
 
 Administrar → *Bloques subidos* → **Eliminar**. Pide confirmación, lo quita para todos y compacta el

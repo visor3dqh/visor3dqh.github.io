@@ -18,18 +18,45 @@ const TROZO_LECTURA = 64 * 1024 * 1024;
 let MAX_BLOQUE = 4_000_000;           // puntos máx. por bloque en memoria
 let MAX_HOJA = 20_000;                // puntos máx. en un nodo hoja
 
+importScripts("../vq/vq.js");
 const avisar = (fase, avance, texto) => postMessage({ tipo: "progreso", fase, avance, texto });
 
 onmessage = async (e) => {
   try {
     if (e.data.maxBloque) MAX_BLOQUE = e.data.maxBloque;
     if (e.data.maxHoja) MAX_HOJA = e.data.maxHoja;
-    const r = await convertir(e.data.file, e.data.carpeta);
+    let r;
+    if (e.data.tarea === "cifrar") r = await cifrarArchivos(e.data.carpeta, e.data.entradas);
+    else r = await convertir(e.data.file, e.data.carpeta);
     postMessage({ tipo: "listo", ...r });
   } catch (err) {
     postMessage({ tipo: "error", mensaje: err && err.message ? err.message : String(err) });
   }
 };
+
+/* ---------------- cifrado antes de subir ---------------- */
+// entradas: [{ blob, salida }]. Escribe "salida" en la carpeta OPFS: encabezado + datos cifrados.
+async function cifrarArchivos(carpeta, entradas) {
+  const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle(carpeta, { create: true });
+  const total = entradas.reduce((a, x) => a + x.blob.size, 0) || 1;
+  const TROZO = 16 * 1024 * 1024; // múltiplo de 16
+  let hecho = 0;
+  for (const { blob, salida } of entradas) {
+    const fh = await dir.getFileHandle(salida, { create: true });
+    const a = await fh.createSyncAccessHandle();
+    a.truncate(0);
+    const enc = VQ.nuevoEncabezado(), nonce = VQ.nonceDe(enc);
+    a.write(enc, { at: 0 });
+    for (let off = 0; off < blob.size; off += TROZO) {
+      const datos = new Uint8Array(await blob.slice(off, Math.min(off + TROZO, blob.size)).arrayBuffer());
+      a.write(await VQ.cifrar(nonce, off, datos), { at: VQ.ENC + off });
+      hecho += datos.length;
+      avisar("cifrado", hecho / total, "Cifrando");
+    }
+    a.flush(); a.close();
+  }
+  return { cifrados: entradas.length };
+}
 
 /* ---------------- cabecera LAS ---------------- */
 function leerCabecera(buf, tamArchivo) {
