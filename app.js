@@ -653,6 +653,13 @@ const marco = new THREE.LineLoop(
 );
 marco.visible = false; marco.renderOrder = 10;
 viewer.scene.scene.add(marco);
+// relleno del plano de corte: se ve como una superficie y sobre ella se mide
+const relleno = new THREE.Mesh(
+  new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.10, side: THREE.DoubleSide, depthWrite: false })
+);
+relleno.visible = false; relleno.renderOrder = 9;
+viewer.scene.scene.add(relleno);
 
 function hexARgb(h) { return [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16) / 255); }
 
@@ -664,7 +671,8 @@ function cajaTotal() {
 function actualizarCorte() {
   $id("opcCorte").style.display = tipo === "0" ? "none" : "block";
   $id("filaAng").style.display = tipo === "vertical" ? "flex" : "none";
-  if (tipo === "0" || !viewer.scene.pointclouds.length) { sec.mode = 0; marco.visible = false; return; }
+  $id("filaMedirCorte").style.display = $id("filaIman").style.display = $id("filaRecta").style.display = tipo === "0" ? "none" : "flex";
+  if (tipo === "0" || !viewer.scene.pointclouds.length) { sec.mode = 0; marco.visible = false; relleno.visible = false; return; }
 
   const b = cajaTotal(), c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
   const ang = (parseFloat($id("angCorte").value) * Math.PI) / 180;
@@ -694,6 +702,9 @@ function actualizarCorte() {
     marco.scale.set(ancho, s.z, 1);
   }
   marco.visible = true;
+  relleno.position.copy(marco.position); relleno.quaternion.copy(marco.quaternion); relleno.scale.copy(marco.scale);
+  relleno.material.color.setRGB(...sec.color);
+  relleno.visible = true;
 }
 
 for (const bt of document.querySelectorAll("#tipoCorte button")) bt.onclick = () => {
@@ -722,9 +733,90 @@ const MED = {
   altura:    { showDistances: false, showHeight: true, showArea: false, closed: false, maxMarkers: 2, name: "Altura" },
   area:      { showDistances: true, showArea: true, closed: true, name: "Área" },
 };
+let insertando = false, shiftPulsado = false;
 for (const bt of document.querySelectorAll("button[data-m]"))
-  bt.onclick = () => viewer.measuringTool.startInsertion(MED[bt.dataset.m]);
+  bt.onclick = () => { insertando = true; viewer.measuringTool.startInsertion(MED[bt.dataset.m]); };
+viewer.renderer.domElement.addEventListener("mouseup", (e) => { if (e.button === 2) setTimeout(() => (insertando = false), 0); });
+window.addEventListener("keydown", (e) => { if (e.key === "Shift") shiftPulsado = true; if (e.key === "Escape") insertando = false; });
+window.addEventListener("keyup", (e) => { if (e.key === "Shift") shiftPulsado = false; });
 $id("borrarMed").onclick = () => viewer.scene.removeAllMeasurements();
+
+/* Medición precisa en nubes de puntos.
+   - Con corte activo y "Medir sobre el corte": el punto queda EXACTAMENTE sobre el plano rojo
+     (intersección del rayo del mouse con el plano), así no salta a un punto lejano por un hueco.
+     Si hay un punto de la franja roja cerca del cursor, se pega a él (proyectado sobre el plano).
+   - Sin corte: se usa el punto de la nube más cercano al cursor (comportamiento normal). */
+// Puntos de la franja de corte (la línea roja), en coordenadas del mundo. Se recalcula como mucho
+// cada 400 ms o cuando cambia el corte, recorriendo solo los nodos visibles.
+let cacheLinea = { firma: "", t: 0, pts: new Float32Array(0) };
+function puntosLineaRoja() {
+  const firma = JSON.stringify([sec.normal, sec.point, sec.thickness, viewer.scene.pointclouds.map((pc) => pc.visibleNodes.length)]);
+  if (firma === cacheLinea.firma && performance.now() - cacheLinea.t < 400) return cacheLinea.pts;
+  const n = sec.normal, p = sec.point, d0 = -(n[0] * p[0] + n[1] * p[1] + n[2] * p[2]), media = Math.max(sec.thickness / 2, 0.005);
+  const out = []; let total = 0;
+  for (const pc of viewer.scene.pointclouds) for (const nodo of pc.visibleNodes) {
+    const sn = nodo.sceneNode; if (!sn || !sn.geometry || !sn.geometry.attributes.position) continue;
+    const a = sn.geometry.attributes.position.array, e = sn.matrixWorld.elements;
+    for (let i = 0; i < a.length; i += 3) {
+      const x = a[i], y = a[i + 1], z = a[i + 2];
+      const wx = e[0] * x + e[4] * y + e[8] * z + e[12], wy = e[1] * x + e[5] * y + e[9] * z + e[13], wz = e[2] * x + e[6] * y + e[10] * z + e[14];
+      if (Math.abs(n[0] * wx + n[1] * wy + n[2] * wz + d0) <= media) { out.push(wx, wy, wz); if (++total > 400000) break; }
+    }
+  }
+  cacheLinea = { firma, t: performance.now(), pts: new Float32Array(out) };
+  return cacheLinea.pts;
+}
+function puntoDeLineaRoja(mouse, camera, el, radioPx) {
+  const pts = puntosLineaRoja(); if (!pts.length) return null;
+  camera.updateMatrixWorld();
+  const m = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).elements;
+  const w = el.clientWidth, h = el.clientHeight, r2 = radioPx * radioPx;
+  let mejor = -1, mejorD = r2;
+  for (let i = 0; i < pts.length; i += 3) {
+    const x = pts[i], y = pts[i + 1], z = pts[i + 2];
+    const cw = m[3] * x + m[7] * y + m[11] * z + m[15]; if (cw <= 0) continue;
+    const sx = ((m[0] * x + m[4] * y + m[8] * z + m[12]) / cw + 1) / 2 * w;
+    const sy = (1 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / cw) / 2 * h;
+    const dd = (sx - mouse.x) ** 2 + (sy - mouse.y) ** 2;
+    if (dd < mejorD) { mejorD = dd; mejor = i; }
+  }
+  return mejor < 0 ? null : { x: pts[mejor], y: pts[mejor + 1], z: pts[mejor + 2] };
+}
+
+const pickOriginal = Potree.Utils.getMousePointCloudIntersection.bind(Potree.Utils);
+Potree.Utils.getMousePointCloudIntersection = function (mouse, camera, visor, nubes, params = {}) {
+  const r = pickOriginal(mouse, camera, visor, nubes, params);
+  if (!(sec.mode > 0 && $id("medirCorte").checked)) return r;
+  const iman = $id("imanMedir").checked;
+  const el = visor.renderer.domElement;
+  const ray = new THREE.Raycaster();
+  ray.setFromCamera({ x: (mouse.x / el.clientWidth) * 2 - 1, y: -(mouse.y / el.clientHeight) * 2 + 1 }, camera);
+  const n = new THREE.Vector3(...sec.normal).normalize(), p0 = new THREE.Vector3(...sec.point);
+  const plano = new THREE.Plane().setFromNormalAndCoplanarPoint(n, p0);
+  const proyectar = (v) => plano.projectPoint(new THREE.Vector3(v.x, v.y, v.z), new THREE.Vector3());
+  let loc = null;
+  // imán: el punto de la línea roja más cercano al cursor (en pantalla), proyectado sobre el plano
+  if (iman) { const q = puntoDeLineaRoja(mouse, camera, el, 14); if (q) loc = proyectar(q); }
+  if (!loc) {
+    const corte = ray.ray.intersectPlane(plano, new THREE.Vector3());
+    if (!corte || Math.abs(ray.ray.direction.dot(n)) < 0.05) return r; // mirando el plano de canto: sin intersección útil
+    loc = corte;
+  }
+  // medida recta: el tramo nuevo sigue el eje del plano más parecido (horizontal o vertical)
+  if (insertando && $id("medidaRecta").checked !== shiftPulsado) {
+    const med = viewer.scene.measurements[viewer.scene.measurements.length - 1];
+    const prev = med && med.points.length >= 2 ? med.points[med.points.length - 2].position : null;
+    if (prev) {
+      const P = proyectar(prev), d = loc.clone().sub(P);
+      let u = new THREE.Vector3().crossVectors(n, new THREE.Vector3(0, 0, 1));
+      if (u.lengthSq() < 1e-6) u.set(1, 0, 0); else u.normalize();
+      const v = new THREE.Vector3().crossVectors(n, u).normalize();
+      const du = d.dot(u), dv = d.dot(v);
+      loc = Math.abs(du) >= Math.abs(dv) ? P.clone().addScaledVector(u, du) : P.clone().addScaledVector(v, dv);
+    }
+  }
+  return { location: loc, distance: camera.position.distanceTo(loc), pointcloud: r ? r.pointcloud : nubes[0], point: { position: loc } };
+};
 const fmtM = (v) => v.toLocaleString("es", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 let firmaMed = "";
 setInterval(() => { // lista de resultados (se actualiza al mover puntos)

@@ -32,7 +32,7 @@
     background: #0f1215; color: #e8eaec; border: 1px solid #3b434b; border-radius: 5px; padding: 4px 6px; font: inherit;
   }
   #vp input[type=range] { accent-color: #e5484d; }
-  #vp input[type=color] { width: 36px; height: 24px; padding: 0; border: 1px solid #3b434b; border-radius: 4px; background: none; flex: 0 0 auto !important; }
+  #vp input[type=color] { width: 36px !important; max-width: 36px; height: 24px; padding: 0; border: 1px solid #3b434b; border-radius: 4px; background: none; flex: 0 0 auto !important; }
   #vp .bts { display: flex; flex-wrap: wrap; gap: 6px; }
   #vp button {
     flex: 1 1 auto; background: #2a3138; color: #e8eaec; border: 1px solid #3b434b; border-radius: 5px;
@@ -175,7 +175,10 @@
           <button data-m="area">Área</button>
           <button id="borrarMed">Borrar</button>
         </div>
-        <p class="nota">Clic izquierdo para marcar puntos, clic derecho para terminar. Los puntos se pueden arrastrar.</p>
+        <label class="fila" id="filaMedirCorte" style="display:none; margin:8px 0 2px"><input type="checkbox" id="medirCorte" checked> <span style="flex:1">Medir sobre el corte <small style="color:#9aa3ab">(los puntos se pegan al plano rojo)</small></span></label>
+        <label class="fila" id="filaIman" style="display:none; margin:2px 0"><input type="checkbox" id="imanMedir" checked> <span style="flex:1">Imán a los puntos de la línea roja</span></label>
+        <label class="fila" id="filaRecta" style="display:none; margin:2px 0"><input type="checkbox" id="medidaRecta" checked> <span style="flex:1">Medida recta <small style="color:#9aa3ab">(horizontal / vertical; Shift = libre)</small></span></label>
+        <p class="nota">Clic izquierdo para marcar puntos, clic derecho para terminar. Los puntos se pueden arrastrar. Con corte activo, usa <b>Ver de frente</b> para medir como en un plano 2D.</p>
         <ul id="medidas"></ul>
       </section>
 

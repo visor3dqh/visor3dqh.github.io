@@ -39,6 +39,17 @@ biblioteca. Los visitantes solo pueden abrir y medir; subir o borrar requiere la
    - Una nube concreta: `...?nube=bloque-a`
    - Varias: `...?nube=bloque-a,bloque-b`
 
+## Medir con precisión
+
+En una nube de puntos un clic puede "atravesar" un hueco y caer en un punto lejano. Con un corte
+activo, el panel Medir ofrece:
+
+- **Medir sobre el corte**: los puntos quedan exactamente sobre el plano rojo; nunca saltan atrás.
+- **Imán a la línea roja**: se pegan al punto real de la franja de corte más cercano al cursor
+  (p. ej. las dos caras de un muro → espesor).
+- **Medida recta**: el tramo sigue el eje horizontal/vertical del corte (mantén Shift para medir libre).
+- Consejo: *Ver de frente* deja el corte como un plano 2D para medir cómodamente.
+
 ## Protección
 
 - **Cifrado de extremo a extremo**: cada nube se cifra en el navegador (AES-256) antes de subirla.
