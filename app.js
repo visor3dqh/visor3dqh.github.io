@@ -763,6 +763,7 @@ let insertando = false, shiftPulsado = false, medActual = null, herramienta = nu
 function terminarInsercion() { insertando = false; medActual = null; herramienta = null; actualizarUI(); }
 for (const bt of document.querySelectorAll("button[data-m]"))
   bt.onclick = () => {
+    if (!cargadas.size) { aviso("Primero enciende un bloque en la barra de abajo."); return; }
     if (insertando && herramienta === bt.dataset.m) { cancelarMedida(); return; } // segundo clic = cancelar
     if (insertando) cancelarMedida();
     insertando = true; herramienta = bt.dataset.m;
@@ -791,8 +792,9 @@ window.addEventListener("keyup", (e) => { if (e.key === "Shift") shiftPulsado = 
 function actualizarUI() {
   const hay = cargadas.size > 0, conCorte = tipo !== "0", nMed = viewer.scene.measurements.length;
   const ver = (id, si) => $id(id).classList.toggle("oculto", !si);
-  ver("secVacio", !hay); ver("secVista", hay); ver("secCorte", hay); ver("secMedir", hay);
-  ver("opcMedir", hay && conCorte);
+  // Vista, Corte y Medir siempre disponibles (sin iniciar sesión); solo los detalles aparecen cuando sirven.
+  ver("secVacio", !hay); ver("secVista", true); ver("secCorte", true); ver("secMedir", true);
+  ver("opcMedir", conCorte);
   ver("ayudaMedir", insertando);
   ver("borrarMed", nMed > 0 && !insertando);
   ver("medidas", nMed > 0);
@@ -929,4 +931,4 @@ function ortografica(si) {
   $id("proyeccion").dataset.o = si ? "1" : "";
 }
 $id("proyeccion").onclick = () => ortografica(!$id("proyeccion").dataset.o);
-$id("encuadrar").onclick = () => viewer.fitToScreen(0.6);
+$id("encuadrar").onclick = () => { if (!cargadas.size) { aviso("Primero enciende un bloque en la barra de abajo."); return; } viewer.fitToScreen(0.6); };
