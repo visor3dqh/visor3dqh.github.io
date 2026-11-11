@@ -810,6 +810,21 @@ function puntoDeLineaRoja(mouse, camera, el, radioPx) {
   return mejor < 0 ? null : { x: pts[mejor], y: pts[mejor + 1], z: pts[mejor + 2] };
 }
 
+// Área real en 3D (fórmula de Newell): sirve en planta, en muros y en planos inclinados.
+// La de Potree solo mide la proyección sobre el suelo, por eso daba 0 en fachadas.
+Potree.Measure.prototype.getArea = function () {
+  const P = this.points.map((q) => q.position);
+  if (P.length < 3) return 0;
+  let nx = 0, ny = 0, nz = 0;
+  for (let i = 0; i < P.length; i++) {
+    const a = P[i], c = P[(i + 1) % P.length];
+    nx += (a.y - c.y) * (a.z + c.z);
+    ny += (a.z - c.z) * (a.x + c.x);
+    nz += (a.x - c.x) * (a.y + c.y);
+  }
+  return Math.sqrt(nx * nx + ny * ny + nz * nz) / 2;
+};
+
 const pickOriginal = Potree.Utils.getMousePointCloudIntersection.bind(Potree.Utils);
 Potree.Utils.getMousePointCloudIntersection = function (mouse, camera, visor, nubes, params = {}) {
   const r = pickOriginal(mouse, camera, visor, nubes, params);

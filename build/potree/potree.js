@@ -54397,7 +54397,7 @@
 					suffix = this.lengthUnitDisplay.code;
 				}
 
-				let txtArea = Utils.addCommas(area.toFixed(1));
+				let txtArea = Utils.addCommas(area.toFixed(2));
 				let msg =  `${txtArea} ${suffix}\u00B2`;
 				this.areaLabel.setText(msg);
 			}
