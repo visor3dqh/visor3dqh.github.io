@@ -785,6 +785,29 @@ viewer.renderer.domElement.addEventListener("mouseup", (e) => {
   }, 0);
 });
 window.addEventListener("keydown", (e) => { if (e.key === "Shift") shiftPulsado = true; if (e.key === "Escape") cancelarMedida(); }, true);
+// Atajos de una tecla (no actúan mientras se escribe en un campo)
+const ATAJOS = {
+  d: () => document.querySelector('button[data-m="distancia"]').click(),
+  h: () => document.querySelector('button[data-m="altura"]').click(),
+  a: () => document.querySelector('button[data-m="area"]').click(),
+  p: () => document.querySelector('#tipoCorte button[data-t="planta"]').click(),
+  v: () => document.querySelector('#tipoCorte button[data-t="vertical"]').click(),
+  x: () => document.querySelector('#tipoCorte button[data-t="0"]').click(),
+  f: () => $id("verFrente").click(),
+  i: () => $id("invertir").click(),
+  e: () => $id("encuadrar").click(),
+  delete: () => { if (!insertando) $id("borrarMed").click(); },
+};
+window.addEventListener("keydown", (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest("input, textarea, select")) return;
+  const f = ATAJOS[e.key.toLowerCase()];
+  if (f) { e.preventDefault(); f(); }
+}, true);
+for (const [sel, tecla] of [['button[data-m="distancia"]', "D"], ['button[data-m="altura"]', "H"], ['button[data-m="area"]', "A"],
+  ['#tipoCorte button[data-t="planta"]', "P"], ['#tipoCorte button[data-t="vertical"]', "V"], ['#tipoCorte button[data-t="0"]', "X"],
+  ["#verFrente", "F"], ["#invertir", "I"], ["#encuadrar", "E"], ["#borrarMed", "Supr"]]) {
+  const el = document.querySelector(sel); if (el) el.title = (el.title ? el.title + " · " : "") + "Atajo: " + tecla;
+}
 window.addEventListener("keyup", (e) => { if (e.key === "Shift") shiftPulsado = false; }, true);
 
 // Muestra solo lo que sirve en cada momento.

@@ -53,6 +53,19 @@ activo, el panel Medir ofrece:
   1.20); en vertical, *Distancia (m)* y *Giro* en grados exactos. La barra sigue disponible.
 - Consejo: *Ver de frente* coloca la cámara de frente al corte para medir cómodamente.
 
+## Atajos de teclado
+
+| Tecla | Acción |
+|---|---|
+| D · H · A | Distancia · Altura · Área |
+| P · V · X | Corte en planta · vertical · sin corte |
+| F · I | Ver de frente · Invertir lado |
+| E | Encuadrar |
+| Shift (mantener) | Medida recta |
+| Esc · Supr | Cancelar medida · Borrar medidas |
+| Enter | Aplicar un valor escrito |
+| Mouse | Izq.: girar · Der.: desplazar · Rueda: zoom · Doble clic: ir al punto |
+
 ## Protección
 
 - **Cifrado de extremo a extremo**: cada nube se cifra en el navegador (AES-256) antes de subirla.
