@@ -73,6 +73,11 @@
   #adminBloques .fb small { color: #9aa3ab; }
   #adminBloques .fb button { flex: 0 0 auto !important; padding: 3px 8px !important; background: #3a2629 !important; border-color: #6b2e33 !important; }
   #adminBloques .fb button:hover { background: #e5484d !important; }
+  #vp .oculto { display: none !important; }
+  #vp details { margin-top: 8px; }
+  #vp summary { cursor: pointer; color: #9aa3ab; font-size: 12px; user-select: none; }
+  #vp summary:hover { color: #e8eaec; }
+  #botonesMedir button.activo { background: #e5484d; border-color: #e5484d; color: #fff; }
   #medidas { margin: 6px 0 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
   #medidas li { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px solid #2a3138; }
   #medidas li span:last-child { color: #fff; font-weight: 600; }
@@ -110,10 +115,81 @@
     <div id="vp">
       <header id="vpCab"><b id="vpTitulo">Visor 3D</b><span id="vpFlecha">▾</span></header>
 
-      <section>
-        <h4>Biblioteca</h4>
-        <p class="nota" style="margin-top:0">Elige los bloques en la barra de abajo; puedes cargar varios a la vez.</p>
-        <p class="nota"><a href="#" id="adminLink" style="color:#9aa3ab">Administrar (subir nubes)</a></p>
+      <section id="secVacio">
+        <p class="nota" style="margin:0">👇 Enciende un bloque en la barra de abajo para empezar.</p>
+      </section>
+
+      <section id="secVista" class="oculto">
+        <div class="bts">
+          <button id="encuadrar" title="Encuadrar los bloques encendidos">Encuadrar</button>
+          <button id="proyeccion">Ortográfica</button>
+        </div>
+        <details id="ajustes">
+          <summary>Ajustes de vista</summary>
+          <label class="fila" style="margin:6px 0 2px"><span>Tamaño</span><input type="range" style="min-width:0; width:100%" id="tamPunto" min="0.5" max="3" step="0.1" value="1.2"><span class="valor" id="tamVal">1.2</span></label>
+          <select id="calidad" title="Calidad" style="width:100%">
+            <option value="baja">Calidad baja (laptop básica)</option>
+            <option value="media" selected>Calidad media (suave)</option>
+            <option value="alta">Calidad alta (más definida)</option>
+          </select>
+        </details>
+      </section>
+
+      <section id="secCorte" class="oculto">
+        <h4>Corte de sección</h4>
+        <div class="bts" id="tipoCorte">
+          <button data-t="0" class="activo">Sin corte</button>
+          <button data-t="planta">Planta</button>
+          <button data-t="vertical">Vertical</button>
+        </div>
+        <div id="opcCorte" style="display:none">
+          <label class="fila"><span>Posición</span><input type="range" id="posCorte" min="0" max="10000" value="5000"></label>
+          <label class="fila"><span id="posEtq">Altura (m)</span><input type="number" id="posNum" step="0.01" inputmode="decimal" title="Escribe la distancia exacta y pulsa Enter"><span class="valor" id="posMax"></span></label>
+          <label class="fila" id="filaAng"><span>Giro</span><input type="range" id="angCorte" min="0" max="180" step="0.5" value="0"><input type="number" id="angNum" min="0" max="360" step="0.1" value="0" style="flex:0 0 64px !important; width:64px" title="Ángulo exacto en grados"></label>
+          <div class="bts" style="margin-top:7px">
+            <button id="verFrente" title="Mirar el corte de frente, como un plano 2D">Ver de frente</button>
+            <button id="invertir" title="Mostrar el otro lado del corte">Invertir lado</button>
+          </div>
+          <details>
+            <summary>Más opciones del corte</summary>
+            <label class="fila"><span>Mostrar</span>
+            <select id="modoCorte">
+              <option value="2">Cortar (ocultar un lado)</option>
+              <option value="1">Solo marcar la línea</option>
+              <option value="3">Solo la franja</option>
+            </select></label>
+            <label class="fila"><span>Posición</span><input type="range" id="posCorte" min="0" max="10000" value="5000"></label>
+            <label class="fila"><span id="posEtq">Altura (m)</span><input type="number" id="posNum" step="0.01" inputmode="decimal" title="Escribe la distancia exacta y pulsa Enter"><span class="valor" id="posMax"></span></label>
+            <label class="fila" id="filaAng"><span>Giro</span><input type="range" id="angCorte" min="0" max="180" step="0.5" value="0"><input type="number" id="angNum" min="0" max="360" step="0.1" value="0" style="flex:0 0 64px !important; width:64px" title="Ángulo exacto en grados"></label>
+            <label class="fila"><span>Grosor (m)</span><input type="number" id="grosorCorte" min="0.005" max="20" step="0.01" value="0.10"></label>
+            <label class="fila"><span>Color línea</span><input type="color" id="colorCorte" value="#ff0000"><span></span></label>
+          </details>
+        </div>
+      </section>
+
+      <section id="secMedir" class="oculto">
+        <h4>Medir</h4>
+        <div class="bts" id="botonesMedir">
+          <button data-m="distancia">Distancia</button>
+          <button data-m="altura">Altura</button>
+          <button data-m="area">Área</button>
+        </div>
+        <div id="ayudaMedir" class="oculto">
+          <p class="nota">Clic para marcar puntos · <b>clic derecho</b> para terminar · <b>Shift</b> = recta.</p>
+          <button id="cancelarMed" style="width:100%">Cancelar (Esc)</button>
+        </div>
+        <details id="opcMedir" class="oculto" open>
+          <summary>Opciones con corte</summary>
+          <label class="fila" id="filaMedirCorte" style="margin:6px 0 2px"><input type="checkbox" id="medirCorte" checked> <span style="flex:1">Medir sobre el corte <small style="color:#9aa3ab">(se pega al plano rojo)</small></span></label>
+          <label class="fila" id="filaIman" style="margin:2px 0"><input type="checkbox" id="imanMedir" checked> <span style="flex:1">Imán a la línea roja</span></label>
+          <label class="fila" id="filaRecta" style="margin:2px 0"><input type="checkbox" id="medidaRecta"> <span style="flex:1">Forzar medida recta</span></label>
+        </details>
+        <ul id="medidas"></ul>
+        <button id="borrarMed" class="oculto" style="width:100%; margin-top:6px">Borrar medidas</button>
+      </section>
+
+      <section id="secAdmin">
+        <p class="nota" style="margin:0"><a href="#" id="adminLink" style="color:#9aa3ab">Administrar (subir / eliminar bloques)</a></p>
         <div id="admin" style="display:none">
           <div id="adminLogin">
             <input type="password" id="adminClave" placeholder="Contraseña" style="width:100%; box-sizing:border-box; margin:4px 0" autocomplete="current-password">
@@ -139,60 +215,6 @@
             <button id="adminSalir" style="width:100%; margin-top:6px">Cerrar sesión</button>
           </div>
           <p class="nota" id="adminEstado"></p>
-        </div>
-      </section>
-
-      <section>
-        <h4>Corte de sección</h4>
-        <div class="bts" id="tipoCorte">
-          <button data-t="0" class="activo">Sin corte</button>
-          <button data-t="planta">Planta</button>
-          <button data-t="vertical">Vertical</button>
-        </div>
-        <div id="opcCorte" style="display:none">
-          <label class="fila"><span>Mostrar</span>
-            <select id="modoCorte">
-              <option value="2">Cortar (ocultar un lado)</option>
-              <option value="1">Solo marcar la línea</option>
-              <option value="3">Solo la franja</option>
-            </select></label>
-          <label class="fila"><span>Posición</span><input type="range" id="posCorte" min="0" max="10000" value="5000"></label>
-          <label class="fila"><span id="posEtq">Altura (m)</span><input type="number" id="posNum" step="0.01" inputmode="decimal" title="Escribe la distancia exacta y pulsa Enter"><span class="valor" id="posMax"></span></label>
-          <label class="fila" id="filaAng"><span>Giro</span><input type="range" id="angCorte" min="0" max="180" step="0.5" value="0"><input type="number" id="angNum" min="0" max="360" step="0.1" value="0" style="flex:0 0 64px !important; width:64px" title="Ángulo exacto en grados"></label>
-          <label class="fila"><span>Grosor (m)</span><input type="number" id="grosorCorte" min="0.005" max="20" step="0.01" value="0.10"></label>
-          <label class="fila"><span>Color línea</span><input type="color" id="colorCorte" value="#ff0000"><span></span></label>
-          <div class="bts" style="margin-top:7px">
-            <button id="invertir">Invertir lado</button>
-            <button id="verFrente">Ver de frente</button>
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <h4>Medir</h4>
-        <div class="bts">
-          <button data-m="distancia">Distancia</button>
-          <button data-m="altura">Altura</button>
-          <button data-m="area">Área</button>
-          <button id="borrarMed">Borrar</button>
-        </div>
-        <label class="fila" id="filaMedirCorte" style="display:none; margin:8px 0 2px"><input type="checkbox" id="medirCorte" checked> <span style="flex:1">Medir sobre el corte <small style="color:#9aa3ab">(los puntos se pegan al plano rojo)</small></span></label>
-        <label class="fila" id="filaIman" style="display:none; margin:2px 0"><input type="checkbox" id="imanMedir" checked> <span style="flex:1">Imán a los puntos de la línea roja</span></label>
-        <label class="fila" id="filaRecta" style="display:none; margin:2px 0"><input type="checkbox" id="medidaRecta"> <span style="flex:1">Forzar medida recta <small style="color:#9aa3ab">(si no, libre/diagonal; mantener Shift = recta)</small></span></label>
-        <p class="nota">Clic izquierdo para marcar puntos, clic derecho para terminar. Los puntos se pueden arrastrar. Con corte activo, usa <b>Ver de frente</b> para medir como en un plano 2D.</p>
-        <ul id="medidas"></ul>
-      </section>
-
-      <section>
-        <div class="bts">
-          <button id="encuadrar">Encuadrar</button>
-          <button id="proyeccion">Ortográfica</button>
-          <label class="fila" style="flex:1 1 100%; margin:2px 0"><span>Tamaño</span><input type="range" style="min-width:0; width:100%" id="tamPunto" min="0.5" max="3" step="0.1" value="1.2"><span class="valor" id="tamVal">1.2</span></label>
-          <select id="calidad" title="Calidad" style="flex:1 1 100%">
-            <option value="baja">Calidad baja (laptop básica)</option>
-            <option value="media" selected>Calidad media (suave)</option>
-            <option value="alta">Calidad alta (más definida)</option>
-          </select>
         </div>
       </section>
     </div>

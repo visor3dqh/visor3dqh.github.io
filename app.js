@@ -151,7 +151,7 @@ function marcarPestanas() {
   document.querySelectorAll("#tiras .pest").forEach((p) => {
     p.classList.toggle("cargada", cargadas.has(p.dataset.id));
     p.classList.toggle("cargando", cargando.has(p.dataset.id));
-  });
+  });  if (typeof actualizarUI === "function") try { actualizarUI(); } catch (e) {}
 }
 
 // misma escala de colores por altura en todos los bloques cargados
@@ -292,7 +292,6 @@ async function cargarBiblioteca() {
   const iniciales = nubes.filter((n) => pedidas.includes(n.id));
   if (iniciales.length > 1) { $id("unoAlaVez").checked = false; $id("unoAlaVez").onchange(); }
   for (const n of iniciales) cargarNube(n);
-  if (!iniciales.length) aviso("Enciende un bloque en la barra de abajo para verlo.");
 }
 $id("verTodos").onclick = () => { for (const n of nubesBiblio) cargarNube(n); };
 $id("unoAlaVez").checked = leer("unoAlaVez") !== "0";
@@ -676,7 +675,6 @@ function cajaTotal() { // límites reales de los puntos (no el cubo del octree)
 function actualizarCorte() {
   $id("opcCorte").style.display = tipo === "0" ? "none" : "block";
   $id("filaAng").style.display = tipo === "vertical" ? "flex" : "none";
-  $id("filaMedirCorte").style.display = $id("filaIman").style.display = $id("filaRecta").style.display = tipo === "0" ? "none" : "flex";
   if (tipo === "0" || !viewer.scene.pointclouds.length) { sec.mode = 0; marco.visible = false; relleno.visible = false; return; }
 
   const b = cajaTotal(), c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
@@ -724,6 +722,7 @@ for (const bt of document.querySelectorAll("#tipoCorte button")) bt.onclick = ()
   tipo = bt.dataset.t;
   document.querySelectorAll("#tipoCorte button").forEach((x) => x.classList.toggle("activo", x === bt));
   actualizarCorte();
+  actualizarUI();
 };
 let posM = null; // posición del corte en metros
 function recorrido() { // largo del recorrido del plano según el tipo de corte
@@ -760,13 +759,50 @@ const MED = {
   altura:    { showDistances: false, showHeight: true, showArea: false, closed: false, maxMarkers: 2, name: "Altura" },
   area:      { showDistances: true, showArea: true, closed: true, name: "Área" },
 };
-let insertando = false, shiftPulsado = false;
+let insertando = false, shiftPulsado = false, medActual = null, herramienta = null;
+function terminarInsercion() { insertando = false; medActual = null; herramienta = null; actualizarUI(); }
 for (const bt of document.querySelectorAll("button[data-m]"))
-  bt.onclick = () => { insertando = true; viewer.measuringTool.startInsertion(MED[bt.dataset.m]); };
-viewer.renderer.domElement.addEventListener("mouseup", (e) => { if (e.button === 2) setTimeout(() => (insertando = false), 0); });
-window.addEventListener("keydown", (e) => { if (e.key === "Shift") shiftPulsado = true; if (e.key === "Escape") insertando = false; });
-window.addEventListener("keyup", (e) => { if (e.key === "Shift") shiftPulsado = false; });
-$id("borrarMed").onclick = () => viewer.scene.removeAllMeasurements();
+  bt.onclick = () => {
+    if (insertando && herramienta === bt.dataset.m) { cancelarMedida(); return; } // segundo clic = cancelar
+    if (insertando) cancelarMedida();
+    insertando = true; herramienta = bt.dataset.m;
+    medActual = viewer.measuringTool.startInsertion(MED[bt.dataset.m]);
+    actualizarUI();
+  };
+function cancelarMedida() {
+  if (!insertando) return;
+  const m = medActual;
+  viewer.dispatchEvent({ type: "cancel_insertions" });
+  if (m && m.points.length < 2) viewer.scene.removeMeasurement(m); // sin tramo completo: se quita
+  terminarInsercion();
+}
+$id("cancelarMed").onclick = cancelarMedida;
+viewer.renderer.domElement.addEventListener("mouseup", (e) => {
+  if (!insertando) return;
+  setTimeout(() => {
+    if (e.button === 2) terminarInsercion();
+    else if (e.button === 0 && medActual && medActual.points.length >= (medActual.maxMarkers || Infinity)) terminarInsercion();
+  }, 0);
+});
+window.addEventListener("keydown", (e) => { if (e.key === "Shift") shiftPulsado = true; if (e.key === "Escape") cancelarMedida(); }, true);
+window.addEventListener("keyup", (e) => { if (e.key === "Shift") shiftPulsado = false; }, true);
+
+// Muestra solo lo que sirve en cada momento.
+function actualizarUI() {
+  const hay = cargadas.size > 0, conCorte = tipo !== "0", nMed = viewer.scene.measurements.length;
+  const ver = (id, si) => $id(id).classList.toggle("oculto", !si);
+  ver("secVacio", !hay); ver("secVista", hay); ver("secCorte", hay); ver("secMedir", hay);
+  ver("opcMedir", hay && conCorte);
+  ver("ayudaMedir", insertando);
+  ver("borrarMed", nMed > 0 && !insertando);
+  ver("medidas", nMed > 0);
+  $id("quitarTodos").style.display = hay ? "" : "none";
+  document.querySelectorAll("#botonesMedir button").forEach((b) => {
+    b.classList.toggle("activo", insertando && b.dataset.m === herramienta);
+    b.title = insertando && b.dataset.m === herramienta ? "Clic otra vez para cancelar" : "";
+  });
+}
+$id("borrarMed").onclick = () => { viewer.scene.removeAllMeasurements(); actualizarUI(); };
 
 /* Medición precisa en nubes de puntos.
    - Con corte activo y "Medir sobre el corte": el punto queda EXACTAMENTE sobre el plano rojo
@@ -873,6 +909,7 @@ setInterval(() => { // lista de resultados (se actualiza al mover puntos)
     cuenta[tipo] = (cuenta[tipo] || 0) + 1;
     filas.push([tipo + " " + cuenta[tipo], valor]);
   }
+  actualizarUI();
   const firma = JSON.stringify(filas);
   if (firma === firmaMed) return;
   firmaMed = firma;
