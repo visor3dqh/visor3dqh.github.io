@@ -799,6 +799,7 @@ const ATAJOS = {
   delete: () => { if (!insertando) $id("borrarMed").click(); },
 };
 window.addEventListener("keydown", (e) => {
+  if (!$id("ayudaModal").hidden) { if (e.key === "Escape") cerrarAyuda(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest("input, textarea, select")) return;
   const f = ATAJOS[e.key.toLowerCase()];
   if (f) { e.preventDefault(); f(); }
@@ -809,6 +810,15 @@ for (const [sel, tecla] of [['button[data-m="distancia"]', "D"], ['button[data-m
   const el = document.querySelector(sel); if (el) el.title = (el.title ? el.title + " · " : "") + "Atajo: " + tecla;
 }
 window.addEventListener("keyup", (e) => { if (e.key === "Shift") shiftPulsado = false; }, true);
+
+/* ---------- ¿Cómo usar? (video tutorial) ---------- */
+function abrirAyuda(e) { if (e) { e.preventDefault(); e.stopPropagation(); } $id("ayudaModal").hidden = false; const v = $id("videoAyuda"); v.currentTime = 0; v.play().catch(() => {}); }
+function cerrarAyuda() { const v = $id("videoAyuda"); v.pause(); $id("ayudaModal").hidden = true; }
+$id("btnAyuda").onclick = abrirAyuda;
+$id("linkAyuda").onclick = abrirAyuda;
+$id("cerrarAyuda").onclick = cerrarAyuda;
+$id("ayudaModal").addEventListener("click", (e) => { if (e.target === $id("ayudaModal")) cerrarAyuda(); });
+for (const ev of ["mousedown", "mouseup", "wheel", "dblclick", "pointerdown", "contextmenu", "keydown"]) $id("ayudaModal").addEventListener(ev, (e) => e.stopPropagation());
 
 // Muestra solo lo que sirve en cada momento.
 function actualizarUI() {

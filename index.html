@@ -74,6 +74,17 @@
   #adminBloques .fb button { flex: 0 0 auto !important; padding: 3px 8px !important; background: #3a2629 !important; border-color: #6b2e33 !important; }
   #adminBloques .fb button:hover { background: #e5484d !important; }
   #vp .oculto { display: none !important; }
+  #btnAyuda { flex: 0 0 auto !important; margin-right: 8px; padding: 3px 9px !important; font-size: 12px !important; background: #e5484d !important; border-color: #e5484d !important; color: #fff !important; border-radius: 6px; }
+  #btnAyuda:hover { background: #f0585d !important; }
+  #ayudaModal { position: absolute; inset: 0; z-index: 2000; background: rgba(5,7,9,.78); display: flex; align-items: center; justify-content: center; padding: 20px; }
+  #ayudaModal[hidden] { display: none; }
+  #ayudaModal .caja { width: min(980px, 100%); background: #161a1e; border: 1px solid #333a41; border-radius: 12px; overflow: hidden;
+    color: #e8eaec; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  #ayudaModal .cab { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; font-size: 15px; }
+  #ayudaModal .cab button { background: none; border: 0; color: #c3c9ce; font-size: 18px; cursor: pointer; padding: 2px 6px; }
+  #ayudaModal .cab button:hover { color: #fff; }
+  #ayudaModal video { display: block; width: 100%; max-height: 70vh; background: #000; }
+  #ayudaModal .nota { margin: 0; padding: 10px 14px 14px; color: #9aa3ab; }
   #vp details { margin-top: 8px; }
   #vp summary { cursor: pointer; color: #9aa3ab; font-size: 12px; user-select: none; }
   #vp summary:hover { color: #e8eaec; }
@@ -113,10 +124,10 @@
 <div class="potree_container" style="position:absolute; width:100%; height:100%; left:0; top:0;">
   <div id="potree_render_area">
     <div id="vp">
-      <header id="vpCab"><b id="vpTitulo">Visor 3D</b><span id="vpFlecha">▾</span></header>
+      <header id="vpCab"><b id="vpTitulo">Visor 3D</b><button id="btnAyuda" title="Ver el video tutorial">¿Cómo usar?</button><span id="vpFlecha">▾</span></header>
 
       <section id="secVacio">
-        <p class="nota" style="margin:0">👇 Enciende un bloque en la barra de abajo para empezar.</p>
+        <p class="nota" style="margin:0">👇 Enciende un bloque en la barra de abajo para empezar. ¿Primera vez? Mira <a href="#" id="linkAyuda" style="color:#e8eaec">el video de 3 minutos</a>.</p>
       </section>
 
       <section id="secVista" class="oculto">
@@ -222,6 +233,15 @@
       <button class="mini" id="quitarTodos" title="Apagar todos los bloques">Apagar todo</button>
     </div>
     <div id="aviso"></div>
+    <div id="ayudaModal" role="dialog" aria-label="Cómo usar el visor" hidden>
+      <div class="caja">
+        <div class="cab"><b>¿Cómo usar el Visor 3D?</b><button id="cerrarAyuda" title="Cerrar (Esc)">✕</button></div>
+        <video id="videoAyuda" controls preload="none" poster="ayuda/portada.jpg" playsinline>
+          <source src="ayuda/tutorial.mp4" type="video/mp4">
+        </video>
+        <p class="nota">Video sin sonido, con subtítulos paso a paso. Atajos: <b>D</b> distancia · <b>H</b> altura · <b>A</b> área · <b>P</b> planta · <b>V</b> vertical · <b>X</b> sin corte · <b>F</b> ver de frente · <b>I</b> invertir · <b>E</b> encuadrar · <b>Shift</b> recta · <b>Esc</b> cancelar · <b>Supr</b> borrar medidas.</p>
+      </div>
+    </div>
   </div>
 </div>
 
