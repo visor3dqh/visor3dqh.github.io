@@ -47,7 +47,10 @@ activo, el panel Medir ofrece:
 - **Medir sobre el corte**: los puntos quedan exactamente sobre el plano rojo; nunca saltan atrás.
 - **Imán a la línea roja**: se pegan al punto real de la franja de corte más cercano al cursor
   (p. ej. las dos caras de un muro → espesor).
-- **Medida recta**: el tramo sigue el eje horizontal/vertical del corte (mantén Shift para medir libre).
+- **Libre o diagonal** por defecto; **Forzar medida recta** (o mantener Shift) alinea el tramo al eje
+  horizontal/vertical del corte.
+- **Posición del corte escrita**: en planta, *Altura (m)* desde el punto más bajo de la nube (p. ej.
+  1.20); en vertical, *Distancia (m)* y *Giro* en grados exactos. La barra sigue disponible.
 - Consejo: *Ver de frente* deja el corte como un plano 2D para medir cómodamente.
 
 ## Protección

@@ -166,14 +166,14 @@ async function cargarNube(n, { encuadrar = false } = {}) {
   cargando.add(n.id); marcarPestanas();
   aviso("Cargando «" + n.nombre + "»…", false, true);
   try {
-    let pc, conColor, rangoZ = null;
+    let pc, conColor, rangoZ = null, caja = null; // caja: límites reales de los puntos [min, max]
     const url = n.url || urlHF(n.ruta, n.repo);
     if (/metadata\.json$/i.test(url)) { // octree Potree (convertido en la página)
       const r = await Potree.OctreeLoader.load(url);
       pc = new Potree.PointCloudOctree(r.geometry);
       conColor = !!r.geometry.pointAttributes.attributes.find((a) => a.name === "rgba");
       const pos = r.geometry.pointAttributes.attributes.find((a) => a.name === "position");
-      if (pos && pos.range && pos.range[0]) rangoZ = [pos.range[0][2], pos.range[1][2]];
+      if (pos && pos.range && pos.range[0]) { rangoZ = [pos.range[0][2], pos.range[1][2]]; caja = [pos.range[0], pos.range[1]]; }
     } else { // COPC
       const lector = lectorRemoto(url);
       await lector.resolver();
@@ -185,7 +185,7 @@ async function cargarNube(n, { encuadrar = false } = {}) {
       pc = new Potree.PointCloudOctree(geometry);
       // formatos LAS 7, 8 y 10 traen color; el resto se pinta por altura
       conColor = [7, 8, 10].includes(copc.header ? copc.header.pointDataRecordFormat : 7);
-      if (copc.header && copc.header.min) rangoZ = [copc.header.min[2], copc.header.max[2]];
+      if (copc.header && copc.header.min) { rangoZ = [copc.header.min[2], copc.header.max[2]]; caja = [copc.header.min, copc.header.max]; }
     }
     pc.name = n.nombre;
     aplicarMaterial(pc);
@@ -197,7 +197,7 @@ async function cargarNube(n, { encuadrar = false } = {}) {
     if ($id("unoAlaVez").checked && ultimoPedido && ultimoPedido !== n.id) { cargando.delete(n.id); marcarPestanas(); if (!cargando.size) aviso(""); return; }
     const primera = cargadas.size === 0;
     viewer.scene.addPointCloud(pc);
-    cargadas.set(n.id, { pc, conColor, rangoZ });
+    cargadas.set(n.id, { pc, conColor, rangoZ, caja });
     unificarAlturas();
     if (primera || encuadrar) viewer.zoomTo(pc, 1.1, 600);
     actualizarCorte();
@@ -663,9 +663,14 @@ viewer.scene.scene.add(relleno);
 
 function hexARgb(h) { return [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16) / 255); }
 
-function cajaTotal() {
-  const bb = viewer.getBoundingBox(viewer.scene.pointclouds);
-  return new THREE.Box3(new THREE.Vector3().copy(bb.min), new THREE.Vector3().copy(bb.max));
+function cajaTotal() { // límites reales de los puntos (no el cubo del octree)
+  const b = new THREE.Box3();
+  for (const c of cargadas.values()) {
+    if (c.caja) b.union(new THREE.Box3(new THREE.Vector3(...c.caja[0]), new THREE.Vector3(...c.caja[1])));
+    else { const bb = viewer.getBoundingBox([c.pc]); b.union(new THREE.Box3(new THREE.Vector3().copy(bb.min), new THREE.Vector3().copy(bb.max))); }
+  }
+  if (b.isEmpty()) { const bb = viewer.getBoundingBox(viewer.scene.pointclouds); return new THREE.Box3(new THREE.Vector3().copy(bb.min), new THREE.Vector3().copy(bb.max)); }
+  return b;
 }
 
 function actualizarCorte() {
@@ -675,11 +680,14 @@ function actualizarCorte() {
   if (tipo === "0" || !viewer.scene.pointclouds.length) { sec.mode = 0; marco.visible = false; relleno.visible = false; return; }
 
   const b = cajaTotal(), c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
-  const ang = (parseFloat($id("angCorte").value) * Math.PI) / 180;
+  const ang = ((parseFloat($id("angNum").value) || 0) * Math.PI) / 180;
   const n = tipo === "planta" ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(Math.cos(ang), Math.sin(ang), 0);
   // recorrido del plano: proyección de la caja sobre la normal
   const medio = (Math.abs(n.x) * s.x + Math.abs(n.y) * s.y + Math.abs(n.z) * s.z) / 2;
-  const t = (parseFloat($id("posCorte").value) / 1000 - 0.5) * 2 * medio;
+  // posición escrita o con la barra: metros desde el inicio del recorrido (desde abajo en planta)
+  if (posM == null || !isFinite(posM)) posM = medio;
+  posM = Math.min(Math.max(posM, 0), 2 * medio);
+  const t = posM - medio;
   const p = c.clone().addScaledVector(n, t);
 
   sec.mode = parseInt($id("modoCorte").value);
@@ -688,8 +696,12 @@ function actualizarCorte() {
   sec.thickness = Math.max(0.001, parseFloat($id("grosorCorte").value) || 0.1);
   sec.color = hexARgb($id("colorCorte").value);
 
-  $id("posVal").textContent = tipo === "planta" ? p.z.toFixed(2) + " m" : (t + medio).toFixed(2) + " m";
-  $id("angVal").textContent = $id("angCorte").value + "°";
+  $id("posEtq").textContent = tipo === "planta" ? "Altura (m)" : "Distancia (m)";
+  $id("posEtq").title = tipo === "planta" ? "Altura del corte medida desde el punto más bajo de la nube" : "Distancia desde el borde de la nube";
+  if (document.activeElement !== $id("posNum")) $id("posNum").value = posM.toFixed(2);
+  $id("posNum").max = (2 * medio).toFixed(2); $id("posNum").min = 0;
+  $id("posMax").textContent = "/ " + (2 * medio).toFixed(1);
+  if (document.activeElement !== $id("posCorte")) $id("posCorte").value = Math.round((posM / (2 * medio || 1)) * 10000);
 
   // marco del plano de corte
   marco.material.color.setRGB(...sec.color);
@@ -708,11 +720,26 @@ function actualizarCorte() {
 }
 
 for (const bt of document.querySelectorAll("#tipoCorte button")) bt.onclick = () => {
+  if (tipo !== bt.dataset.t) posM = null; // cada tipo de corte empieza al centro
   tipo = bt.dataset.t;
   document.querySelectorAll("#tipoCorte button").forEach((x) => x.classList.toggle("activo", x === bt));
   actualizarCorte();
 };
-for (const idc of ["modoCorte", "posCorte", "angCorte", "grosorCorte", "colorCorte"]) $id(idc).oninput = actualizarCorte;
+let posM = null; // posición del corte en metros
+function recorrido() { // largo del recorrido del plano según el tipo de corte
+  const s = cajaTotal().getSize(new THREE.Vector3());
+  if (tipo === "planta") return s.z;
+  const a = ((parseFloat($id("angNum").value) || 0) * Math.PI) / 180;
+  return Math.abs(Math.cos(a)) * s.x + Math.abs(Math.sin(a)) * s.y;
+}
+for (const idc of ["modoCorte", "grosorCorte", "colorCorte"]) $id(idc).oninput = actualizarCorte;
+$id("posCorte").oninput = () => { posM = (parseFloat($id("posCorte").value) / 10000) * recorrido(); actualizarCorte(); };
+const aplicarPosEscrita = () => { const v = parseFloat(String($id("posNum").value).replace(",", ".")); if (isFinite(v)) { posM = v; actualizarCorte(); } };
+$id("posNum").oninput = aplicarPosEscrita;
+$id("posNum").onchange = () => { aplicarPosEscrita(); $id("posNum").value = posM.toFixed(2); };
+$id("posNum").addEventListener("keydown", (e) => { if (e.key === "Enter") { aplicarPosEscrita(); $id("posNum").blur(); } });
+$id("angCorte").oninput = () => { $id("angNum").value = $id("angCorte").value; actualizarCorte(); };
+$id("angNum").oninput = () => { const v = parseFloat($id("angNum").value) || 0; $id("angCorte").value = ((v % 180) + 180) % 180; actualizarCorte(); };
 $id("invertir").onclick = () => { lado = -lado; actualizarCorte(); };
 $id("verFrente").onclick = () => {
   if (!sec.mode) return;
