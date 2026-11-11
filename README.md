@@ -51,7 +51,7 @@ activo, el panel Medir ofrece:
   horizontal/vertical del corte.
 - **Posición del corte escrita**: en planta, *Altura (m)* desde el punto más bajo de la nube (p. ej.
   1.20); en vertical, *Distancia (m)* y *Giro* en grados exactos. La barra sigue disponible.
-- Consejo: *Ver de frente* deja el corte como un plano 2D para medir cómodamente.
+- Consejo: *Ver de frente* coloca la cámara de frente al corte para medir cómodamente.
 
 ## Protección
 

@@ -746,7 +746,6 @@ $id("verFrente").onclick = () => {
   const p = new THREE.Vector3(...sec.point), n = new THREE.Vector3(...sec.normal);
   const pos = p.clone().addScaledVector(n, r);
   if (tipo === "planta") pos.y -= r * 0.001; // evita la vista exactamente vertical
-  ortografica(true);
   viewer.scene.view.setView(pos, p, 400);
 };
 const c0 = CFG.corte || {};
@@ -925,10 +924,6 @@ setInterval(() => { // lista de resultados (se actualiza al mover puntos)
 }, 400);
 
 /* ---------- vista ---------- */
-function ortografica(si) {
-  viewer.setCameraMode(si ? Potree.CameraMode.ORTHOGRAPHIC : Potree.CameraMode.PERSPECTIVE);
-  $id("proyeccion").textContent = si ? "Perspectiva" : "Ortográfica";
-  $id("proyeccion").dataset.o = si ? "1" : "";
-}
-$id("proyeccion").onclick = () => ortografica(!$id("proyeccion").dataset.o);
+// Siempre en perspectiva (la vista ortográfica ocultaba el modelo y confundía).
+viewer.setCameraMode(Potree.CameraMode.PERSPECTIVE);
 $id("encuadrar").onclick = () => { if (!cargadas.size) { aviso("Primero enciende un bloque en la barra de abajo."); return; } viewer.fitToScreen(0.6); };
